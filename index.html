@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>스케줄 음악 플레이어</title>
+    <!-- 외부 스타일시트 연결 -->
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- 상단 고정 헤더: 타이틀 + 스케줄 상태·시작/중지 -->
+      <header class="app-header">
+        <!-- 타이틀: 눌러서 바로 수정 (Enter 저장, Esc 취소) -->
+        <div class="title-row">
+          <h1 id="appTitle" contenteditable="plaintext-only" spellcheck="false" title="눌러서 이름 바꾸기">스케줄 음악 플레이어</h1>
+          <button id="editTitleBtn" class="icon-mini" aria-label="타이틀 수정">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></svg>
+          </button>
+        </div>
+        <div class="sched-ctl">
+          <!-- PC 시작(Windows 로그인) 시 자동 실행 -->
+          <div class="autostart" id="autostartRow">
+            <span>PC 시작 시 자동 실행</span>
+            <label class="switch">
+              <input type="checkbox" id="autostartInput" aria-label="PC 시작 시 자동 실행" />
+              <span></span>
+            </label>
+          </div>
+          <span id="scheduleStatus" class="status-pill" role="status">
+            <i class="status-dot"></i><span id="scheduleText">스케줄 꺼짐</span>
+          </span>
+          <button id="toggleScheduleBtn" class="btn btn-primary">스케줄 시작</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <!-- 좌측: 스케줄이 잡힌 날짜를 점으로 보여주는 달력 -->
+        <aside class="side">
+          <div class="card calendar-card">
+            <div class="cal-head">
+              <button id="calPrev" class="icon-mini" aria-label="이전 달">
+                <svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" /></svg>
+              </button>
+              <h3 id="calTitle"></h3>
+              <button id="calNext" class="icon-mini" aria-label="다음 달">
+                <svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" /></svg>
+              </button>
+              <button id="calToday" class="chip">오늘</button>
+            </div>
+            <div class="cal-grid cal-week">
+              <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span><span class="sun">일</span>
+            </div>
+            <div class="cal-grid" id="calDays"></div>
+            <div class="cal-legend">
+              <span><i class="dot"></i>재생 예정</span>
+              <span><i class="dot empty"></i>곡 없음</span>
+            </div>
+            <!-- 선택한 날짜의 시간대 -->
+            <div class="cal-detail" id="calDetail"></div>
+          </div>
+        </aside>
+
+        <main class="main">
+          <!-- 스크롤해도 상단에 고정 -->
+          <div class="card player-card">
+            <div class="card-head">
+              <h3>1. 플레이어</h3>
+              <p id="nowPlaying" class="muted">재생할 시간대의 미리듣기를 눌러주세요</p>
+            </div>
+            <div class="player">
+              <button id="playBtn" class="icon-btn" aria-label="재생" disabled>
+                <svg viewBox="0 0 24 24">
+                  <path id="playIcon" d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+              <div class="progress">
+                <input
+                  type="range"
+                  id="seek"
+                  min="0"
+                  max="0"
+                  step="0.1"
+                  value="0"
+                  disabled
+                />
+                <div class="times">
+                  <span id="curTime">0:00</span><span id="durTime">0:00</span>
+                </div>
+              </div>
+              <button
+                id="stopBtn"
+                class="icon-btn secondary"
+                aria-label="정지"
+                disabled
+              >
+                <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z" /></svg>
+              </button>
+            </div>
+            <!-- 현재 불러온 시간대의 재생 목록 -->
+            <ol id="playlistEl" class="playlist"></ol>
+            <audio id="audioPlayer"></audio>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>2. 요일·시간대별 음악</h3>
+              <div class="chips">
+                <button class="chip" data-preset="weekday">평일</button>
+                <button class="chip" data-preset="weekend">주말</button>
+                <button class="chip" data-preset="all">매일</button>
+                <button class="chip" data-preset="none">해제</button>
+              </div>
+            </div>
+            <!-- 요일마다 시간대를 여러 개 두고 시간대별로 곡을 설정 -->
+            <div class="days" id="days"></div>
+            <input type="file" id="fileInput" accept="audio/*" multiple hidden />
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- 안내 메시지 (잠깐 보였다 사라짐) -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- 외부 자바스크립트 연결 -->
+    <script src="render.js"></script>
+  </body>
+</html>

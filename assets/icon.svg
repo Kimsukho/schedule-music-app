@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App icon: Panther blue tile, white music note, small clock badge for "scheduled" -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B7BF6" />
+      <stop offset="1" stop-color="#1D4ED8" />
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)" />
+  <!-- music note -->
+  <path fill="#FFFFFF" transform="translate(-44 -16)" d="M214 104h146v78h-82v176a74 74 0 1 1-64-73.3z" />
+  <!-- clock badge -->
+  <circle cx="368" cy="368" r="86" fill="#1D4ED8" />
+  <circle cx="368" cy="368" r="70" fill="#FFFFFF" />
+  <circle cx="368" cy="368" r="52" fill="none" stroke="#1D4ED8" stroke-width="14" />
+  <path d="M368 336v36l24 14" fill="none" stroke="#1D4ED8" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

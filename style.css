@@ -1,0 +1,998 @@
+/* Panther light palette */
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --line: #e5e9ef;
+  --line2: #d3d9e2;
+  --tx: #1b2330;
+  --tx2: #4b5565;
+  --tx3: #5e6878;
+  --blue: #2563eb;
+  --blue-soft: rgba(47, 109, 246, 0.12);
+  --red: #d42f3d;
+  --field: rgba(38, 54, 82, 0.075);
+  --field2: rgba(38, 54, 82, 0.12);
+  --track: #dde3eb;
+  --green: #1f9d55;
+  --green-soft: rgba(31, 157, 85, 0.1);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(27, 35, 48, 0.04);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx3);
+  margin: 0;
+}
+.muted {
+  margin: 0;
+  color: var(--tx2);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex: none;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, filter 0.15s;
+}
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+.btn-ghost {
+  background: var(--field);
+  color: var(--tx);
+}
+.btn-ghost:hover {
+  background: var(--field2);
+}
+.btn-danger {
+  background: rgba(226, 58, 72, 0.1);
+  color: var(--red);
+}
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.chip:focus-visible,
+select:focus-visible,
+.switch input:focus-visible + span {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.file-row input {
+  display: none;
+}
+
+/* Preset chips */
+.chips {
+  display: flex;
+  gap: 6px;
+}
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--tx2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--field2);
+  color: var(--tx);
+}
+
+/* Weekday rows */
+.days {
+  display: flex;
+  flex-direction: column;
+}
+.day {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.day:first-child {
+  border-top: 0;
+}
+.day-name {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--field);
+  color: var(--tx3);
+  flex: none;
+}
+.day.on .day-name {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.day-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  transition: opacity 0.15s;
+}
+.day:not(.on) .day-time {
+  opacity: 0.4;
+}
+.day-time span {
+  color: var(--tx3);
+  font-weight: 600;
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex: none;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--track);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(27, 35, 48, 0.2);
+  transition: transform 0.15s;
+}
+.switch input:checked + span {
+  background: var(--blue);
+}
+.switch input:checked + span::after {
+  transform: translateX(18px);
+}
+
+/* Hour / minute picker */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  min-width: 64px;
+  padding: 0 28px 0 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--field)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235E6878' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")
+    no-repeat right 6px center / 18px;
+  color: var(--tx);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+select:hover {
+  background-color: var(--field2);
+}
+select:disabled {
+  cursor: default;
+}
+
+/* Status */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--tx2);
+  background: var(--field);
+}
+.status.active {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.status.playing {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+/* Player */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  background: var(--blue);
+  color: #fff;
+}
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+.icon-btn.secondary {
+  width: 36px;
+  height: 36px;
+  background: var(--field);
+  color: var(--tx);
+}
+.icon-btn.secondary svg {
+  width: 18px;
+  height: 18px;
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.progress {
+  flex: 1;
+  min-width: 0;
+}
+.times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --p: 0%;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(var(--blue), var(--blue)) 0 / var(--p) 100% no-repeat, var(--track);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--blue);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
+}
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--blue);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--blue);
+}
+input[type="range"]:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Playlist */
+.playlist {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--tx2);
+  max-height: 100px;
+  overflow-y: auto;
+}
+.playlist:empty {
+  display: none;
+}
+
+/* Player stays pinned to the top while the schedule list scrolls under it */
+.player-card {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 10;
+  box-shadow: 0 6px 16px rgba(27, 35, 48, 0.08);
+}
+/* Fill the gap above the pinned card so the list doesn't show through */
+.player-card::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: 100%;
+  height: 24px;
+  background: var(--bg);
+}
+/* Keep the pinned card short: about three songs, the rest scroll */
+.player-card .playlist {
+  max-height: 64px;
+}
+.playlist li.current {
+  color: var(--blue);
+  font-weight: 600;
+}
+.card-head .muted {
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* Weekday row: time on top, that day's songs below */
+.day {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 0;
+}
+.day-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+/* Start ~ stop: four pickers in one row, so a little narrower */
+.day-time select {
+  min-width: 56px;
+  padding: 0 24px 0 10px;
+  background-position: right 4px center;
+}
+.day-time .range-sep {
+  margin: 0 4px;
+  color: var(--tx3);
+}
+.day-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--tx3);
+}
+.day-summary.warn {
+  color: var(--red);
+}
+
+/* Time slots: each one has its own start ~ stop and songs */
+.slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 44px;
+}
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(38, 54, 82, 0.035);
+}
+.slot .day-time {
+  margin-left: 0;
+  flex-wrap: wrap;
+}
+.slot .day-time .icon-mini {
+  margin-left: auto;
+}
+.day-music {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.day:not(.on) .day-music {
+  opacity: 0.6;
+}
+.icon-mini.danger:hover {
+  background: rgba(226, 58, 72, 0.1);
+  color: var(--red);
+}
+.day-tracks {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.day-tracks.warn {
+  color: var(--red);
+}
+.btn-mini {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--tx);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+.btn-mini:hover {
+  background: var(--field2);
+}
+.icon-mini {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--tx2);
+  cursor: pointer;
+  flex: none;
+}
+.icon-mini:hover {
+  background: var(--field);
+  color: var(--blue);
+}
+.icon-mini:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+  color: var(--tx2);
+}
+.btn-mini:focus-visible,
+.icon-mini:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Schedule card tidy-up: off days fold to one line, on days show their slots */
+.day-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.day.on .day-main {
+  margin-bottom: 2px;
+}
+.slot {
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.day-tracks.empty {
+  color: var(--tx3);
+  opacity: 0.8;
+}
+.btn-mini.accent {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.btn-mini.accent:hover {
+  background: rgba(47, 109, 246, 0.18);
+}
+.add-slot {
+  height: 34px;
+  border: 1px dashed var(--line2);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tx2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.add-slot:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.add-slot:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Two columns: calendar on the left, player and schedule on the right */
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.side {
+  position: sticky;
+  top: var(--header-h);
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .side {
+    position: static;
+  }
+}
+
+/* Calendar */
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.cal-head h3 {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  color: var(--tx);
+}
+.cal-head .chip {
+  margin-left: 4px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px 4px;
+}
+.cal-week span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tx3);
+  padding: 4px 0;
+}
+.cal-week .sat,
+.cal-day.sat .num {
+  color: var(--blue);
+}
+.cal-week .sun,
+.cal-day.sun .num {
+  color: var(--red);
+}
+.cal-day {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--tx);
+  cursor: pointer;
+}
+.cal-day:hover {
+  background: var(--field);
+}
+.cal-day:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.cal-day .num {
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cal-day.past {
+  opacity: 0.5;
+}
+.cal-day.out {
+  opacity: 0.3;
+}
+/* Today: soft blue tile. Selected: solid blue tile (wins when today is also selected). */
+.cal-day.today {
+  background: rgba(37, 99, 235, 0.22);
+  opacity: 1;
+}
+.cal-day.today .num {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+.cal-day.selected {
+  background: var(--blue);
+  opacity: 1;
+}
+.cal-day.selected .num {
+  color: #fff;
+  font-weight: 700;
+}
+.cal-day.selected .dot {
+  background: #fff;
+}
+.cal-day.selected .dot.empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.2px rgba(255, 255, 255, 0.85);
+}
+.dots {
+  display: flex;
+  gap: 2px;
+  height: 5px;
+}
+.dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--blue);
+  flex: none;
+}
+.dot.empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.2px var(--tx3);
+}
+.cal-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--tx3);
+}
+.cal-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Selected date's time slots */
+.cal-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cal-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cal-detail h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.cal-detail ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.cal-detail li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.cal-detail li b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cal-detail li span {
+  margin-left: auto;
+  color: var(--tx3);
+}
+.cal-empty {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+/* "설정 보기" highlights the weekday row it jumps to */
+@keyframes day-flash {
+  from {
+    background: var(--blue-soft);
+  }
+  to {
+    background: transparent;
+  }
+}
+.day.flash {
+  animation: day-flash 1.4s ease-out;
+}
+
+/* Editable title */
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.title-row h1 {
+  margin: 0;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: 8px;
+  outline: none;
+  cursor: text;
+  min-width: 40px;
+}
+.title-row h1:hover {
+  background: var(--field);
+}
+.title-row h1:focus {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+.title-row .icon-mini {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.title-row:hover .icon-mini,
+.title-row .icon-mini:focus-visible {
+  opacity: 1;
+}
+.title-row h1:focus + .icon-mini {
+  display: none;
+}
+
+/* Sticky header: title on the left, schedule status + start/stop on the right */
+:root {
+  --header-h: 72px;
+}
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--header-h);
+  margin-top: -24px; /* sit flush with the window top, body padding included */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg);
+}
+.app-header .title-row {
+  flex: 1;
+  min-width: 0;
+}
+.sched-ctl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 0;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  max-width: 360px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx2);
+}
+.status-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line2);
+  flex: none;
+}
+.status-pill.active {
+  color: var(--green);
+}
+.status-pill.active .status-dot {
+  background: var(--green);
+}
+.status-pill.playing {
+  color: var(--blue);
+}
+.status-pill.playing .status-dot {
+  background: var(--blue);
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+.status-pill.warn {
+  color: var(--amber, #c77a14);
+}
+.status-pill.warn .status-dot {
+  background: #c77a14;
+}
+@keyframes status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0);
+  }
+}
+
+/* Narrow window: header wraps and nothing is pinned */
+@media (max-width: 760px) {
+  .app-header {
+    position: static;
+    height: auto;
+    margin-top: 0;
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .player-card {
+    top: 0;
+  }
+}
+
+/* Toast: short notice at the bottom centre */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 50;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #2a3342;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(27, 35, 48, 0.2);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Slot time problems: red for overlap / same start and stop, amber for a stop on the next day */
+.slot.error {
+  border-color: rgba(212, 47, 61, 0.45);
+  background: rgba(226, 58, 72, 0.04);
+}
+.slot.warn {
+  border-color: rgba(199, 122, 20, 0.45);
+  background: rgba(199, 122, 20, 0.05);
+}
+.slot-issue {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.slot.error .slot-issue {
+  color: var(--red);
+}
+.slot.warn .slot-issue {
+  color: #c77a14;
+}
+
+/* "PC 시작 시 자동 실행" switch in the header */
+.autostart {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx2);
+  white-space: nowrap;
+}
+.autostart[hidden] {
+  display: none;
+}
+.autostart:has(input:disabled) {
+  opacity: 0.5;
+}
+.autostart input:disabled {
+  cursor: default;
+}
