@@ -5,7 +5,7 @@
 
 [1] 준비물
 --------------------------------------------------
-- 설치 파일: dist\schedule-music-app Setup 1.0.0.exe (약 76MB)
+- 설치 파일: dist\schedule-music-app Setup 1.1.0.exe (약 76MB)
   이 파일 하나만 옮기면 됩니다. dist 폴더의 다른 파일은 필요 없습니다.
 - 재생할 음악 파일 (mp3 등)
 

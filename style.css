@@ -947,12 +947,27 @@ input[type="range"]:disabled {
 @media (max-width: 760px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0; /* cards keep their own 12px gap, same as between player and schedule */
   }
   .app-header {
     height: auto;
     margin-top: 0;
     padding-bottom: 12px;
     flex-wrap: wrap;
+  }
+  /* Title gets its own line; status and buttons go on the next one */
+  .title-row {
+    flex: 1 1 100%;
+  }
+  .title-row h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sched-ctl {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 

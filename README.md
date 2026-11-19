@@ -96,7 +96,7 @@ npm start
 npm run build
 ```
 
-- 결과: `dist\schedule-music-app Setup 1.0.0.exe`
+- 결과: `dist\schedule-music-app Setup <버전>.exe` (지금은 1.1.0)
 - NSIS 원클릭 설치 파일입니다. 사용자 계정 단위로 설치되고, 관리자 권한은 필요 없습니다.
 - 코드 서명이 없어서, 처음 실행할 때 Windows SmartScreen 경고가 뜹니다.
 - 버전을 올리려면 `package.json`의 `version`을 바꾼 뒤 빌드합니다.
