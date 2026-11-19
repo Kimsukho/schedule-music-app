@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# Installers kept per version on this PC (about 76MB each, too big for the repo)
+releases/

@@ -6,7 +6,7 @@ if (!app.isPackaged) {
   try {
     require("electron-reload")(__dirname, {
       // Don't watch build output or packages: watching dist keeps app.asar open and breaks `npm run build`
-      ignored: /node_modules|[\\/]dist[\\/]|[\\/]build[\\/]|[\\/]docs[\\/]|[\\/]\.git[\\/]/,
+      ignored: /node_modules|[\\/](dist|releases|build|docs|\.git)[\\/]/,
       electron: path.join(
         __dirname,
         "node_modules",

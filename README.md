@@ -72,10 +72,12 @@ schedule-music-app/
 │  ├─ icon.ico          exe·설치 파일 아이콘
 │  └─ icon.png          512px 아이콘
 ├─ scripts/
-│  └─ make-icon.js      icon.svg → png·ico 생성
+│  ├─ make-icon.js      icon.svg → png·ico 생성
+│  └─ copy-release.js   빌드한 설치 파일을 releases/로 복사
 ├─ docs/screenshots/    README 화면 캡처 (설치 파일에는 들어가지 않음)
 ├─ 설치안내.md / 설치안내.txt   다른 PC 설치 안내 (사용자용)
-└─ dist/                빌드 결과 (설치 파일)
+├─ dist/                빌드 결과 (빌드할 때마다 바뀜, git 제외)
+└─ releases/            배포한 설치 파일을 버전별로 보관 (git 제외)
 ```
 
 ## 개발
@@ -92,14 +94,18 @@ npm start
 
 ## 빌드 (설치 파일 만들기)
 
+배포할 버전은 `release`로 빌드합니다. 빌드한 뒤 설치 파일을 `releases\`에 버전별로 복사해 둡니다.
+
 ```powershell
-npm run build
+npm run release
 ```
 
-- 결과: `dist\schedule-music-app Setup <버전>.exe` (지금은 1.1.0)
+- 결과: `releases\schedule-music-app Setup <버전>.exe` (지금은 1.0.0, 1.1.0 보관 중)
+- 확인용으로 빌드만 하려면 `npm run build`를 씁니다. 결과는 `dist\`에만 생깁니다.
+- 새 버전을 낼 때는 먼저 `package.json`의 `version`을 올립니다. 같은 버전으로 다시 만들면 `releases\`의 같은 파일이 바뀝니다.
+- `releases\`는 설치 파일이 커서(약 76MB) git에 올리지 않고 이 PC에만 보관합니다.
 - NSIS 원클릭 설치 파일입니다. 사용자 계정 단위로 설치되고, 관리자 권한은 필요 없습니다.
 - 코드 서명이 없어서, 처음 실행할 때 Windows SmartScreen 경고가 뜹니다.
-- 버전을 올리려면 `package.json`의 `version`을 바꾼 뒤 빌드합니다.
 
 ## 아이콘 바꾸기
 

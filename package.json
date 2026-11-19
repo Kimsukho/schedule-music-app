@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "icon": "electron scripts/make-icon.js ."
+    "icon": "electron scripts/make-icon.js .",
+    "release": "electron-builder && node scripts/copy-release.js"
   },
   "build": {
     "appId": "com.example.schedulemusic",
@@ -21,6 +22,7 @@
     "files": [
       "**/*",
       "!dist/**",
+      "!releases/**",
       "!docs/**",
       "!scripts/**",
       "!build/**",
