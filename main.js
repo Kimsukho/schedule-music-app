@@ -5,6 +5,8 @@ const path = require("path");
 if (!app.isPackaged) {
   try {
     require("electron-reload")(__dirname, {
+      // Don't watch build output or packages: watching dist keeps app.asar open and breaks `npm run build`
+      ignored: /node_modules|[\\/]dist[\\/]|[\\/]build[\\/]|[\\/]docs[\\/]|[\\/]\.git[\\/]/,
       electron: path.join(
         __dirname,
         "node_modules",
@@ -48,6 +50,8 @@ function createWindow() {
     height: 720,
     show: false,
     icon: path.join(__dirname, "assets", "icon.png"),
+    // Hide the File/Edit/View menu bar (Alt shows it; shortcuts like Ctrl+R still work)
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // 실무에선 보안상 true 권장

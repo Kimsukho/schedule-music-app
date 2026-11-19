@@ -19,7 +19,8 @@ const STORAGE_KEY = "schedule-player-days";
 
 const ICON_PLAY = `<svg viewBox="0 0 24 24"><path d="${PLAY_PATH}" /></svg>`;
 const ICON_CLEAR = `<svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>`;
-const ICON_DELETE = `<svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg>`;
+const ICON_SETTINGS = `<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" /></svg>`;
+const ICON_DELETE =`<svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg>`;
 
 const DAYS = [
   { name: "월", dow: 1 },
@@ -54,7 +55,12 @@ const newSlot = (h, m) => ({ h, m, eh: (h + 1) % 24, em: m, tracks: [] });
 
 function loadTracks(list) {
   return (list || [])
-    .map((t) => ({ name: t.name, path: t.path, src: toFileUrl(t.path) }))
+    .map((t) => ({
+      name: t.name,
+      path: t.path,
+      src: toFileUrl(t.path),
+      duration: typeof t.duration === "number" ? t.duration : null, // seconds, filled in by probeDurations()
+    }))
     .filter((t) => t.src);
 }
 
@@ -98,15 +104,21 @@ if ("Notification" in window && Notification.permission !== "granted") {
 }
 
 const pad = (n) => String(n).padStart(2, "0");
-const fmt = (s) =>
-  isFinite(s) ? `${Math.floor(s / 60)}:${pad(Math.floor(s % 60))}` : "0:00";
+// 75 -> "1:15", 4383 -> "1:13:03"
+const fmt = (s) => {
+  if (!isFinite(s)) return "0:00";
+  const t = Math.floor(s);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  return h > 0 ? `${h}:${pad(m)}:${pad(t % 60)}` : `${m}:${pad(t % 60)}`;
+};
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const startMin = (slot) => slot.h * 60 + slot.m;
 // Same start and stop time: shown as an error and never played
 const zeroLength = (slot) => slot.eh !== null && slot.eh * 60 + slot.em === startMin(slot);
 // Has songs and a usable time window
-const playable = (slot) => slot.tracks.length > 0 && !zeroLength(slot);
+const playable = (slot) => slot.tracks.some((t) => !t.missing) && !zeroLength(slot);
 
 function save() {
   try {
@@ -117,7 +129,9 @@ function save() {
         m: s.m,
         eh: s.eh,
         em: s.em,
-        tracks: s.tracks.filter((t) => t.path).map((t) => ({ name: t.name, path: t.path })),
+        tracks: s.tracks
+          .filter((t) => t.path)
+          .map((t) => ({ name: t.name, path: t.path, duration: t.duration ?? null })),
       })),
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -202,15 +216,96 @@ function toastSlotIssue(i, slot) {
   if (issue) showToast(`${slotName(i, slot)}: ${issue.msgs.join(", ")}`);
 }
 
+// --- 곡 길이 ---
+// Read each song's length once from its file metadata and keep it with the schedule.
+// A file that can't be opened (moved or deleted) is marked missing.
+const probing = new Set();
+let probeRenderTimer = null;
+
+function probeDuration(src) {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    a.preload = "metadata";
+    a.onloadedmetadata = () => resolve(isFinite(a.duration) ? a.duration : null);
+    a.onerror = () => resolve(undefined); // undefined = file not found / unreadable
+    a.src = src;
+  });
+}
+
+function probeDurations() {
+  schedule.forEach((d) =>
+    d.slots.forEach((s) =>
+      s.tracks.forEach((t) => {
+        if (t.duration != null || t.missing || probing.has(t)) return;
+        probing.add(t);
+        probeDuration(t.src).then((sec) => {
+          probing.delete(t);
+          if (sec === undefined) t.missing = true;
+          else t.duration = sec;
+          // Re-render once after a batch of files has been read
+          clearTimeout(probeRenderTimer);
+          probeRenderTimer = setTimeout(() => {
+            save();
+            renderDays();
+            renderCalendar();
+            if (currentTracks.length) renderPlaylist();
+          }, 50);
+        });
+      }),
+    ),
+  );
+}
+
+// Total seconds of a slot's songs; null while some lengths are still unknown
+function slotMusicSeconds(slot) {
+  let total = 0;
+  for (const t of slot.tracks) {
+    if (t.missing) continue;
+    if (t.duration == null) return null;
+    total += t.duration;
+  }
+  return total;
+}
+
+// 754 -> "12분 34초", 3720 -> "1시간 2분", 45 -> "45초"
+function lengthText(sec) {
+  const s = Math.round(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return m ? `${h}시간 ${m}분` : `${h}시간`;
+  if (m > 0) return r ? `${m}분 ${r}초` : `${m}분`;
+  return `${r}초`;
+}
+
+// Stop time that fits the songs exactly (rounded up to the minute)
+function fittedEnd(slot) {
+  const total = slotMusicSeconds(slot);
+  if (!total) return null;
+  const end = (startMin(slot) + Math.max(1, Math.ceil(total / 60))) % 1440;
+  return { eh: Math.floor(end / 60), em: end % 60 };
+}
+
 function renderSlot(d, slot, j, issue) {
   const empty = slot.tracks.length === 0;
   const label = `${d.name}요일 시간대 ${j + 1}`;
+  // Song lengths, total always first: "총 2분 30초 · a.mp3 2:30", "총 3분 · a.mp3 0:30, b.mp3 2:30"
+  const total = slotMusicSeconds(slot);
+  const names = slot.tracks
+    .map((t) => (t.missing ? `${t.name} (파일 없음)` : t.duration != null ? `${t.name} ${fmt(t.duration)}` : t.name))
+    .join(", ");
   const summary = empty
     ? "곡 없음"
-    : escapeHtml(`${slot.tracks.length}곡 · ${slot.tracks.map((t) => t.name).join(", ")}`);
+    : escapeHtml(total ? `총 ${lengthText(total)} · ${names}` : names);
   const note = issue
     ? `<p class="slot-issue" role="alert">${escapeHtml(issue.msgs.join(" · "))}</p>`
     : "";
+  // Button that sets the stop time to start + total song length
+  const target = empty ? null : fittedEnd(slot);
+  const fitBtn =
+    target && (slot.eh !== target.eh || slot.em !== target.em)
+      ? `<button class="btn-mini" data-act="fit-end" title="종료를 ${pad(target.eh)}:${pad(target.em)}으로 맞춤">곡 길이에 맞춤</button>`
+      : "";
   return `
     <div class="slot${issue ? ` ${issue.level}` : ""}" data-j="${j}">
       <div class="day-time">
@@ -224,8 +319,9 @@ function renderSlot(d, slot, j, issue) {
         <button class="icon-mini danger" data-act="del-slot" aria-label="${label} 삭제">${ICON_DELETE}</button>
       </div>
       <div class="day-music">
-        <button class="btn-mini${empty ? " accent" : ""}" data-act="pick">${empty ? "곡 선택" : "곡 변경"}</button>
+        <button class="btn-mini" data-act="pick">${empty ? "곡 선택" : "곡 변경"}</button>
         <span class="day-tracks${empty ? " empty" : ""}" title="${summary}">${summary}</span>
+        ${fitBtn}
         ${empty ? "" : `
         <button class="icon-mini" data-act="preview" aria-label="${label} 미리듣기">${ICON_PLAY}</button>
         <button class="icon-mini" data-act="clear" aria-label="${label} 곡 비우기">${ICON_CLEAR}</button>`}
@@ -234,29 +330,113 @@ function renderSlot(d, slot, j, issue) {
     </div>`;
 }
 
-// Off days collapse to one line that lists their time slots.
-function daySummary(day) {
-  if (day.on) return "";
-  if (day.slots.length === 0) return "꺼짐";
-  return `꺼짐 · ${day.slots.map(rangeText).join(", ")}`;
+// 요일 접기: 켜진 요일도 접어서 한 줄로 볼 수 있음 (접은 상태는 저장)
+const FOLD_KEY = "schedule-player-folded";
+let folded = new Set();
+try {
+  folded = new Set(JSON.parse(localStorage.getItem(FOLD_KEY)) || []);
+} catch (e) {}
+function saveFolded() {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify([...folded]));
+  } catch (e) {}
+}
+function unfold(i) {
+  if (folded.delete(i)) saveFolded();
 }
 
-// 요일 목록 그리기 (켜진 요일만 시간대를 펼쳐서 보여줌)
+const ICON_CHEVRON = `<svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" /></svg>`;
+
+// --- 다른 요일에 복사 ---
+let copyFrom = null; // weekday whose copy panel is open
+let copyTargets = new Set();
+
+function renderCopyPanel(i) {
+  const chips = DAYS.map((d, k) =>
+    k === i
+      ? ""
+      : `<button class="chip${copyTargets.has(k) ? " on" : ""}" data-act="copy-pick" data-to="${k}" aria-pressed="${copyTargets.has(k)}">${d.name}</button>`,
+  ).join("");
+  return `
+    <div class="copy-panel">
+      <div class="copy-row">
+        <span class="copy-label">복사할 요일</span>
+        <div class="chips">${chips}</div>
+      </div>
+      <p class="copy-hint">선택한 요일의 기존 시간대는 ${DAYS[i].name}요일 시간대로 바뀝니다.</p>
+      <div class="copy-row end">
+        <button class="btn-mini" data-act="copy-cancel">취소</button>
+        <button class="btn-mini primary" data-act="copy-do"${copyTargets.size ? "" : " disabled"}>복사</button>
+      </div>
+    </div>`;
+}
+
+// Copy weekday `from`'s slots (and songs) onto each target, turning it on.
+// A target whose copy would overlap another day's slots is left as it was.
+function copyDay(from, targets) {
+  const copied = [];
+  const skipped = [];
+  for (const k of targets) {
+    const target = schedule[k];
+    const old = { on: target.on, slots: target.slots };
+    const before = new Map();
+    schedule.forEach((d) => d.slots.forEach((s) => before.set(s, errorMsgs(s))));
+    target.slots = schedule[from].slots.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t })) }));
+    target.on = true;
+    let reason = null;
+    for (const [owner, d] of schedule.entries()) {
+      for (const s of d.slots) {
+        const fresh = errorMsgs(s).filter((msg) => !(before.get(s) || []).includes(msg));
+        if (fresh.length && !reason) reason = `${slotName(owner, s)} 시간대가 ${fresh[0]}`;
+      }
+    }
+    if (reason) {
+      Object.assign(target, old);
+      skipped.push(`${DAYS[k].name}요일(${reason})`);
+    } else {
+      copied.push(k);
+    }
+  }
+  return { copied, skipped };
+}
+
+// One line for a day that is off or folded: its time slots
+function daySummary(day, isFolded) {
+  const ranges = day.slots.map(rangeText).join(", ");
+  if (!day.on) return day.slots.length ? `꺼짐 · ${ranges}` : "꺼짐";
+  if (isFolded) return day.slots.length ? ranges : "시간대 없음";
+  return "";
+}
+
+// 요일 목록 그리기 (켜져 있고 접지 않은 요일만 시간대를 펼쳐서 보여줌)
 function renderDays() {
   const issues = slotIssues();
   daysEl.innerHTML = DAYS.map((d, i) => {
     const day = schedule[i];
-    const body = day.on
+    const isFolded = day.on && folded.has(i);
+    const open = day.on && !isFolded;
+    const hasIssue = day.slots.some((s) => issues.has(s));
+    const body = open
       ? `<div class="slots">
           ${day.slots.map((slot, j) => renderSlot(d, slot, j, issues.get(slot))).join("")}
-          <button class="add-slot" data-act="add-slot">+ 시간대 추가</button>
+          <div class="slot-actions">
+            <button class="add-slot" data-act="add-slot">+ 시간대 추가</button>
+            ${day.slots.length && copyFrom !== i ? `<button class="add-slot" data-act="copy-open">다른 요일에 복사</button>` : ""}
+          </div>
+          ${copyFrom === i ? renderCopyPanel(i) : ""}
         </div>`
       : "";
+    const summary = daySummary(day, isFolded);
+    // Fold button sits before the weekday name; off days keep an empty spot so names line up
+    const foldBtn = day.on
+      ? `<button class="icon-mini fold${open ? " open" : ""}" data-act="fold" aria-expanded="${open}" aria-label="${d.name}요일 ${open ? "접기" : "펼치기"}">${ICON_CHEVRON}</button>`
+      : `<span class="fold-space"></span>`;
     return `
-      <div class="day${day.on ? " on" : ""}" data-i="${i}">
+      <div class="day${day.on ? " on" : ""}${isFolded ? " folded" : ""}" data-i="${i}">
         <div class="day-main">
+          ${foldBtn}
           <div class="day-name">${d.name}</div>
-          <span class="day-summary">${escapeHtml(daySummary(day))}</span>
+          <span class="day-summary${isFolded && hasIssue ? " warn" : ""}"${day.on ? ' data-act="fold"' : ""}>${escapeHtml(summary)}${isFolded && hasIssue ? " · 시간 확인 필요" : ""}</span>
           <label class="switch">
             <input type="checkbox" data-k="on"${day.on ? " checked" : ""} aria-label="${d.name}요일 사용" />
             <span></span>
@@ -288,6 +468,7 @@ daysEl.addEventListener("change", (e) => {
     }
     // 켜면 다른 요일 시간대와 겹치는 경우 막음 (자정을 넘는 시간대 등)
     const clash = tryTurnOn(i);
+    if (!clash) unfold(i); // a day just turned on opens so its slots can be set
     refresh();
     if (clash) {
       showToast(`${DAYS[i].name}요일을 켤 수 없습니다. ${clash}`);
@@ -370,6 +551,48 @@ daysEl.addEventListener("click", (e) => {
   const day = schedule[i];
   const act = btn.dataset.act;
 
+  if (act === "fold") {
+    if (folded.has(i)) folded.delete(i);
+    else folded.add(i);
+    saveFolded();
+    renderDays();
+    return;
+  }
+
+  if (act === "copy-open") {
+    copyFrom = i;
+    copyTargets = new Set();
+    renderDays();
+    return;
+  }
+  if (act === "copy-cancel") {
+    copyFrom = null;
+    renderDays();
+    return;
+  }
+  if (act === "copy-pick") {
+    const k = Number(btn.dataset.to);
+    if (copyTargets.has(k)) copyTargets.delete(k);
+    else copyTargets.add(k);
+    renderDays();
+    return;
+  }
+  if (act === "copy-do") {
+    const { copied, skipped } = copyDay(i, [...copyTargets].sort((a, b) => a - b));
+    copyFrom = null;
+    // Fold the days that received the copy so the list stays short
+    copied.forEach((k) => folded.add(k));
+    saveFolded();
+    refresh();
+    probeDurations();
+    const names = copied.map((k) => DAYS[k].name).join("·");
+    const msgs = [];
+    if (copied.length) msgs.push(`${DAYS[i].name}요일 시간대를 ${names}요일에 복사했습니다.`);
+    if (skipped.length) msgs.push(`겹쳐서 복사하지 않음: ${skipped.join(", ")}`);
+    showToast(msgs.join(" "));
+    return;
+  }
+
   if (act === "add-slot") {
     // New slot starts where the last one ends (or an hour after it starts)
     const last = day.slots[day.slots.length - 1];
@@ -408,6 +631,23 @@ daysEl.addEventListener("click", (e) => {
     loadSlotToPlayer(i, j);
     updateStatus();
     audioPlayer.play();
+  } else if (act === "fit-end") {
+    // 종료 시간을 곡 길이에 맞춤 (겹치면 막고 원래대로)
+    const slot = day.slots[j];
+    const target = fittedEnd(slot);
+    if (!target) return;
+    const before = { eh: slot.eh, em: slot.em };
+    const errorsBefore = errorMsgs(slot);
+    Object.assign(slot, target);
+    const newErrors = errorMsgs(slot).filter((msg) => !errorsBefore.includes(msg));
+    if (newErrors.length > 0) {
+      Object.assign(slot, before);
+      refresh();
+      showToast(`곡 길이에 맞출 수 없습니다. ${newErrors.join(", ")}`);
+      return;
+    }
+    refresh();
+    showToast(`${slotName(i, slot)}: 종료를 곡 길이에 맞췄습니다.`);
   } else if (act === "clear") {
     day.slots[j].tracks = [];
     refresh();
@@ -450,10 +690,11 @@ fileInput.addEventListener("change", (event) => {
   slot.tracks = Array.from(files).map((file) => {
     const src = file.path ? toFileUrl(file.path) : null;
     return src
-      ? { name: file.name, path: file.path, src }
-      : { name: file.name, path: null, src: URL.createObjectURL(file) };
+      ? { name: file.name, path: file.path, src, duration: null }
+      : { name: file.name, path: null, src: URL.createObjectURL(file), duration: null };
   });
   refresh();
+  probeDurations(); // 곡 길이 읽기
 });
 
 // Earliest playable slot from now, within the coming week.
@@ -479,7 +720,7 @@ function nextSlot() {
 // Header status: dot colour + text (gray = off, green = waiting, blue = playing, amber = nothing to play)
 function updateStatus() {
   toggleScheduleBtn.textContent = isScheduled ? "스케줄 중지" : "스케줄 시작";
-  toggleScheduleBtn.className = isScheduled ? "btn btn-danger" : "btn btn-primary";
+  toggleScheduleBtn.className = isScheduled ? "btn btn-ghost" : "btn btn-primary";
   let text;
   let state;
   if (playingLabel) {
@@ -502,7 +743,7 @@ function updateStatus() {
 // 2. 플레이어에 시간대의 곡 목록 불러오기
 function loadSlotToPlayer(i, j) {
   const slot = schedule[i].slots[j];
-  currentTracks = slot.tracks.slice();
+  currentTracks = slot.tracks.filter((t) => !t.missing); // skip files that can't be found
   currentLabel = `${DAYS[i].name}요일 ${rangeText(slot)}`;
   renderPlaylist();
   loadTrack(0);
@@ -522,7 +763,20 @@ function renderPlaylist() {
   playlistEl.replaceChildren(
     ...currentTracks.map((t, idx) => {
       const li = document.createElement("li");
-      li.textContent = t.name;
+      // One line: name (cut with …) and its length on the right
+      const row = document.createElement("div");
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = t.name;
+      name.title = t.name;
+      row.append(name);
+      if (t.duration != null) {
+        const len = document.createElement("span");
+        len.className = "len";
+        len.textContent = fmt(t.duration);
+        row.append(len);
+      }
+      li.append(row);
       if (idx === currentIndex) li.className = "current";
       return li;
     }),
@@ -532,7 +786,7 @@ function renderPlaylist() {
 function renderNowPlaying() {
   const t = currentTracks[currentIndex];
   nowPlaying.textContent = t
-    ? `${currentLabel} · ${currentIndex + 1}/${currentTracks.length} · ${t.name}`
+    ? currentLabel // which song is playing shows in the highlighted list below
     : "재생할 시간대의 미리듣기를 눌러주세요";
   Array.from(playlistEl.children).forEach((li, idx) => {
     li.classList.toggle("current", idx === currentIndex);
@@ -870,13 +1124,13 @@ function renderCalDetail() {
     body = `<ul>${day.slots
       .map(
         (s) =>
-          `<li><i class="dot${s.tracks.length ? "" : " empty"}"></i><b>${rangeText(s)}</b><span>${s.tracks.length ? `${s.tracks.length}곡` : "곡 없음"}</span></li>`,
+          `<li><i class="dot${s.tracks.length ? "" : " empty"}"></i><b>${rangeText(s)}</b><span>${!s.tracks.length ? "곡 없음" : slotMusicSeconds(s) ? `총 ${lengthText(slotMusicSeconds(s))}` : ""}</span></li>`,
       )
       .join("")}</ul>`;
   calDetail.innerHTML = `
     <div class="cal-detail-head">
       <h4>${title}</h4>
-      <button class="btn-mini" data-act="goto-day" data-i="${i}">설정 보기</button>
+      <button class="icon-mini" data-act="goto-day" data-i="${i}" aria-label="${DAYS[i].name}요일 설정" title="${DAYS[i].name}요일 설정">${ICON_SETTINGS}</button>
     </div>
     ${body}`;
 }
@@ -893,9 +1147,18 @@ calDays.addEventListener("click", (e) => {
 calDetail.addEventListener("click", (e) => {
   const btn = e.target.closest('[data-act="goto-day"]');
   if (!btn) return;
+  unfold(Number(btn.dataset.i)); // open a folded day before jumping to it
+  renderDays();
   const row = daysEl.querySelector(`.day[data-i="${btn.dataset.i}"]`);
   if (!row) return;
-  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Scroll only the weekday list (scrollIntoView would also shift the page layout)
+  const list = daysEl;
+  if (list.scrollHeight > list.clientHeight) {
+    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    list.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+  } else {
+    row.scrollIntoView({ behavior: "smooth", block: "center" }); // narrow window: the page scrolls
+  }
   row.classList.remove("flash");
   void row.offsetWidth; // restart the animation
   row.classList.add("flash");
@@ -997,6 +1260,7 @@ if (!ipc) {
 renderDays();
 updateStatus();
 renderCalendar();
+probeDurations(); // 저장된 곡 중 길이를 아직 모르는 곡 읽기
 
 // 지난번에 스케줄을 켜둔 채 종료했으면 다시 켬 (PC 자동 실행 시에도 바로 스케줄 동작)
 if (savedScheduleOn()) {
@@ -1004,3 +1268,9 @@ if (savedScheduleOn()) {
   if (canPlay) enableSchedule(false);
   else saveScheduleOn(false);
 }
+
+// Wide window: the page itself never scrolls (only the weekday list does). Focus or
+// scroll-into-view can still nudge it, which cuts off the header, so put it back.
+window.addEventListener("scroll", () => {
+  if (window.innerWidth > 760 && window.scrollY !== 0) window.scrollTo(0, 0);
+});

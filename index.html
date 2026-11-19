@@ -65,7 +65,7 @@
           <!-- 스크롤해도 상단에 고정 -->
           <div class="card player-card">
             <div class="card-head">
-              <h3>1. 플레이어</h3>
+              <h3>플레이어</h3>
               <p id="nowPlaying" class="muted">재생할 시간대의 미리듣기를 눌러주세요</p>
             </div>
             <div class="player">
@@ -102,9 +102,10 @@
             <audio id="audioPlayer"></audio>
           </div>
 
-          <div class="card">
+          <!-- 요일 목록은 이 카드 안에서만 스크롤 -->
+          <div class="card schedule-card">
             <div class="card-head">
-              <h3>2. 요일·시간대별 음악</h3>
+              <h3>요일·시간대별 음악</h3>
               <div class="chips">
                 <button class="chip" data-preset="weekday">평일</button>
                 <button class="chip" data-preset="weekend">주말</button>

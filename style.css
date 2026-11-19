@@ -1,6 +1,9 @@
-/* Panther light palette */
+/* Schedule music player: Panther light palette.
+ * Colour rule: blue for the main action and "now" (primary buttons, switches, today/selected
+ * date, schedule dots, the song playing); red only for errors; everything else gray.
+ */
 :root {
-  --bg: #f7f8fa;
+  --bg: #f0f2f5; /* light gray so the white cards stand out */
   --card: #ffffff;
   --line: #e5e9ef;
   --line2: #d3d9e2;
@@ -10,12 +13,15 @@
   --blue: #2563eb;
   --blue-soft: rgba(47, 109, 246, 0.12);
   --red: #d42f3d;
+  --green: #1f9d55;
+  --amber: #c77a14;
   --field: rgba(38, 54, 82, 0.075);
   --field2: rgba(38, 54, 82, 0.12);
   --track: #dde3eb;
-  --green: #1f9d55;
-  --green-soft: rgba(31, 157, 85, 0.1);
+  --header-h: 72px;
 }
+
+/* ---------- Base ---------- */
 * {
   box-sizing: border-box;
 }
@@ -36,36 +42,12 @@ h1 {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  margin: 0 0 16px;
-}
-.card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 18px 20px;
-  margin-bottom: 12px;
-  box-shadow: 0 1px 2px rgba(27, 35, 48, 0.04);
-}
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
 }
 h3 {
+  margin: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--tx3);
-  margin: 0;
-}
-.muted {
-  margin: 0;
-  color: var(--tx2);
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 svg {
   width: 18px;
@@ -74,7 +56,157 @@ svg {
   flex: none;
 }
 
-/* Buttons */
+/* ---------- Layout: header, calendar left, player + schedule right ---------- */
+.app-header {
+  height: var(--header-h);
+  margin-top: -24px; /* the body padding is part of the header row */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg);
+}
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  /* Short shadow: it stays inside the 12px gap between cards instead of spilling onto the next one */
+  box-shadow: 0 1px 2px rgba(27, 35, 48, 0.05), 0 3px 8px rgba(27, 35, 48, 0.06);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* ---------- Header: editable title, autostart, status, start/stop ---------- */
+.title-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.title-row h1 {
+  margin: 0 0 0 -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  outline: none;
+  cursor: text;
+  min-width: 40px;
+}
+.title-row h1:hover {
+  background: var(--field);
+}
+.title-row h1:focus {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+.title-row .icon-mini {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.title-row:hover .icon-mini,
+.title-row .icon-mini:focus-visible {
+  opacity: 1;
+}
+.title-row h1:focus + .icon-mini {
+  display: none;
+}
+.sched-ctl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 0;
+}
+.autostart {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx2);
+  white-space: nowrap;
+}
+.autostart[hidden] {
+  display: none;
+}
+.autostart:has(input:disabled) {
+  opacity: 0.5;
+}
+.autostart input:disabled {
+  cursor: default;
+}
+/* Status pill: the dot carries the colour, the text stays neutral */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  max-width: 360px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx2);
+}
+.status-pill.active,
+.status-pill.playing,
+.status-pill.warn {
+  color: var(--tx);
+}
+.status-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line2);
+  flex: none;
+}
+.status-pill.active .status-dot {
+  background: var(--green);
+}
+.status-pill.playing .status-dot {
+  background: var(--blue);
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+.status-pill.warn .status-dot {
+  background: var(--amber);
+}
+@keyframes status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0);
+  }
+}
+/* Start/stop matches the status pill height */
+.sched-ctl .btn {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* ---------- Buttons and small controls ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -105,29 +237,53 @@ svg {
 .btn-ghost:hover {
   background: var(--field2);
 }
-.btn-danger {
+.btn-mini {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--tx);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+.btn-mini:hover {
+  background: var(--field2);
+}
+.btn-mini.primary {
+  background: var(--blue);
+  color: #fff;
+}
+.btn-mini.primary:hover {
+  filter: brightness(1.08);
+}
+.btn-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.icon-mini {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--tx2);
+  cursor: pointer;
+  flex: none;
+}
+.icon-mini:hover {
+  background: var(--field);
+  color: var(--blue);
+}
+.icon-mini.danger:hover {
   background: rgba(226, 58, 72, 0.1);
   color: var(--red);
 }
-.btn:focus-visible,
-.icon-btn:focus-visible,
-.chip:focus-visible,
-select:focus-visible,
-.switch input:focus-visible + span {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-.file-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.file-row input {
-  display: none;
-}
-
-/* Preset chips */
 .chips {
   display: flex;
   gap: 6px;
@@ -148,51 +304,16 @@ select:focus-visible,
   background: var(--field2);
   color: var(--tx);
 }
-
-/* Weekday rows */
-.days {
-  display: flex;
-  flex-direction: column;
-}
-.day {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
-}
-.day:first-child {
-  border-top: 0;
-}
-.day-name {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--field);
-  color: var(--tx3);
-  flex: none;
-}
-.day.on .day-name {
-  background: var(--blue-soft);
-  color: var(--blue);
-}
-.day-time {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  transition: opacity 0.15s;
-}
-.day:not(.on) .day-time {
-  opacity: 0.4;
-}
-.day-time span {
-  color: var(--tx3);
-  font-weight: 600;
+.btn:focus-visible,
+.btn-mini:focus-visible,
+.icon-btn:focus-visible,
+.icon-mini:focus-visible,
+.chip:focus-visible,
+.add-slot:focus-visible,
+select:focus-visible,
+.switch input:focus-visible + span {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 /* Toggle switch */
@@ -242,17 +363,17 @@ select:focus-visible,
 select {
   appearance: none;
   -webkit-appearance: none;
-  height: 36px;
-  min-width: 64px;
-  padding: 0 28px 0 12px;
+  height: 30px;
+  min-width: 50px;
+  padding: 0 22px 0 9px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--field)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235E6878' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")
-    no-repeat right 6px center / 18px;
+    no-repeat right 4px center / 16px;
   color: var(--tx);
   font: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -264,43 +385,37 @@ select:disabled {
   cursor: default;
 }
 
-/* Status */
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+/* ---------- Player ---------- */
+.player-card .card-head {
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: 8px;
 }
-.status {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--tx2);
-  background: var(--field);
+.player-card .card-head h3 {
+  white-space: nowrap;
+  flex: none;
 }
-.status.active {
-  color: var(--green);
-  background: var(--green-soft);
+/* Now-playing info next to the title, small and muted */
+.muted {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.status.playing {
-  color: var(--blue);
-  background: var(--blue-soft);
-}
-
-/* Player */
 .player {
   display: flex;
   align-items: center;
   gap: 12px;
 }
+/* Play and stop are the same size; play is blue, stop is gray */
 .icon-btn {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 50%;
   display: grid;
@@ -311,40 +426,29 @@ select:disabled {
   color: #fff;
 }
 .icon-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 .icon-btn.secondary {
-  width: 36px;
-  height: 36px;
   background: var(--field);
   color: var(--tx);
 }
-.icon-btn.secondary svg {
-  width: 18px;
-  height: 18px;
-}
 .icon-btn:disabled {
-  opacity: 0.4;
+  background: var(--field);
+  color: var(--tx3);
+  opacity: 0.6;
   cursor: default;
 }
 .progress {
   flex: 1;
   min-width: 0;
 }
-.times {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--tx3);
-  font-variant-numeric: tabular-nums;
-  margin-top: 2px;
-}
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   width: 100%;
-  height: 18px;
+  height: 14px;
   margin: 0;
   background: transparent;
   cursor: pointer;
@@ -385,103 +489,182 @@ input[type="range"]:disabled {
   cursor: default;
   opacity: 0.5;
 }
-
-/* Playlist */
+.times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+}
+/* Songs of the loaded slot: one line each, length on the right; about three show, the rest scroll */
 .playlist {
-  margin: 10px 0 0 0;
+  margin: 10px 0 0;
   padding-left: 20px;
+  max-height: 64px;
+  overflow-y: auto;
   font-size: 13px;
   color: var(--tx2);
-  max-height: 100px;
-  overflow-y: auto;
 }
 .playlist:empty {
   display: none;
 }
-
-/* Player stays pinned to the top while the schedule list scrolls under it */
-.player-card {
-  position: sticky;
-  top: var(--header-h);
-  z-index: 10;
-  box-shadow: 0 6px 16px rgba(27, 35, 48, 0.08);
+.playlist li > div {
+  display: flex;
+  gap: 8px;
 }
-/* Fill the gap above the pinned card so the list doesn't show through */
-.player-card::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  right: -1px;
-  bottom: 100%;
-  height: 24px;
-  background: var(--bg);
+.playlist .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* Keep the pinned card short: about three songs, the rest scroll */
-.player-card .playlist {
-  max-height: 64px;
+.playlist .len {
+  flex: none;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
 }
 .playlist li.current {
   color: var(--blue);
   font-weight: 600;
 }
-.card-head .muted {
-  font-size: 13px;
-  min-width: 0;
+.playlist li.current .len {
+  color: var(--blue);
 }
 
-/* Weekday row: time on top, that day's songs below */
-.day {
+/* ---------- Schedule: weekday rows ---------- */
+.days {
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
+}
+.day {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 10px 0;
+  border-top: 1px solid var(--line);
 }
+.day:first-child {
+  border-top: 0;
+}
+.day.flash {
+  animation: day-flash 1.4s ease-out;
+}
+@keyframes day-flash {
+  from {
+    background: var(--field2);
+  }
+  to {
+    background: transparent;
+  }
+}
+/* Fold button, weekday badge, summary, on/off switch */
 .day-main {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
-/* Start ~ stop: four pickers in one row, so a little narrower */
-.day-time select {
-  min-width: 56px;
-  padding: 0 24px 0 10px;
-  background-position: right 4px center;
+.day.on .day-main {
+  margin-bottom: 2px;
 }
-.day-time .range-sep {
-  margin: 0 4px;
+.icon-mini.fold svg {
+  transition: transform 0.15s;
+  transform: rotate(-90deg); /* folded: points right */
+}
+.icon-mini.fold.open svg {
+  transform: none; /* open: points down */
+}
+.fold-space {
+  width: 28px;
+  flex: none;
+}
+.day-name {
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--field);
   color: var(--tx3);
+  flex: none;
+}
+.day.on .day-name {
+  color: var(--tx);
 }
 .day-summary {
   flex: 1;
   min-width: 0;
   font-size: 13px;
   color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.day-summary.warn {
+.day.on .day-summary {
+  cursor: pointer;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.day.folded .day-summary {
+  color: var(--tx2);
+  font-weight: 600;
+}
+.day-summary.warn,
+.day.folded .day-summary.warn {
   color: var(--red);
 }
 
-/* Time slots: each one has its own start ~ stop and songs */
+/* Time slots: start ~ stop, then the songs. Cards start where the weekday badge starts. */
 .slots {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: 44px;
+  padding-left: 36px; /* fold button 28 + gap 8 */
 }
 .slot {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(38, 54, 82, 0.035);
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(27, 35, 48, 0.06);
 }
-.slot .day-time {
-  margin-left: 0;
+.slot.error {
+  border-color: rgba(212, 47, 61, 0.45);
+  background: rgba(226, 58, 72, 0.04);
+}
+.slot-issue {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--tx3); /* a stop on the next day is just a note */
+}
+.slot.error .slot-issue {
+  color: var(--red);
+}
+.day-time {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 4px;
 }
-.slot .day-time .icon-mini {
+.day-time span {
+  color: var(--tx3);
+  font-weight: 600;
+}
+.day-time .range-sep {
+  margin: 0 4px;
+}
+.day-time .icon-mini {
   margin-left: auto;
 }
 .day-music {
@@ -489,13 +672,6 @@ input[type="range"]:disabled {
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-.day:not(.on) .day-music {
-  opacity: 0.6;
-}
-.icon-mini.danger:hover {
-  background: rgba(226, 58, 72, 0.1);
-  color: var(--red);
 }
 .day-tracks {
   flex: 1;
@@ -506,78 +682,16 @@ input[type="range"]:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.day-tracks.warn {
-  color: var(--red);
-}
-.btn-mini {
-  height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--field);
-  color: var(--tx);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  flex: none;
-}
-.btn-mini:hover {
-  background: var(--field2);
-}
-.icon-mini {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: transparent;
-  color: var(--tx2);
-  cursor: pointer;
-  flex: none;
-}
-.icon-mini:hover {
-  background: var(--field);
-  color: var(--blue);
-}
-.icon-mini:disabled {
-  opacity: 0.35;
-  cursor: default;
-  background: transparent;
-  color: var(--tx2);
-}
-.btn-mini:focus-visible,
-.icon-mini:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-
-/* Schedule card tidy-up: off days fold to one line, on days show their slots */
-.day-summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.day.on .day-main {
-  margin-bottom: 2px;
-}
-.slot {
-  border: 1px solid var(--line);
-  background: var(--card);
-}
 .day-tracks.empty {
-  color: var(--tx3);
   opacity: 0.8;
 }
-.btn-mini.accent {
-  background: var(--blue-soft);
-  color: var(--blue);
-}
-.btn-mini.accent:hover {
-  background: rgba(47, 109, 246, 0.18);
+/* "+ 시간대 추가" and "다른 요일에 복사" side by side */
+.slot-actions {
+  display: flex;
+  gap: 6px;
 }
 .add-slot {
+  flex: 1;
   height: 34px;
   border: 1px dashed var(--line2);
   border-radius: 10px;
@@ -593,32 +707,43 @@ input[type="range"]:disabled {
   color: var(--blue);
   background: var(--blue-soft);
 }
-.add-slot:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
+/* Copy-to-other-days panel: gray box; only picked days and 복사 are blue */
+.copy-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.copy-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.copy-row.end {
+  justify-content: flex-end;
+}
+.copy-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.copy-panel .chip {
+  background: var(--card);
+}
+.copy-panel .chip.on {
+  background: var(--blue);
+  color: #fff;
+}
+.copy-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tx2);
 }
 
-/* Two columns: calendar on the left, player and schedule on the right */
-.layout {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-.side {
-  position: sticky;
-  top: var(--header-h);
-}
-@media (max-width: 760px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .side {
-    position: static;
-  }
-}
-
-/* Calendar */
+/* ---------- Calendar ---------- */
 .cal-head {
   display: flex;
   align-items: center;
@@ -645,14 +770,6 @@ input[type="range"]:disabled {
   font-weight: 600;
   color: var(--tx3);
   padding: 4px 0;
-}
-.cal-week .sat,
-.cal-day.sat .num {
-  color: var(--blue);
-}
-.cal-week .sun,
-.cal-day.sun .num {
-  color: var(--red);
 }
 .cal-day {
   height: 40px;
@@ -687,7 +804,7 @@ input[type="range"]:disabled {
 .cal-day.out {
   opacity: 0.3;
 }
-/* Today: soft blue tile. Selected: solid blue tile (wins when today is also selected). */
+/* Today: tinted tile. Selected: solid blue tile (wins when today is also selected). */
 .cal-day.today {
   background: rgba(37, 99, 235, 0.22);
   opacity: 1;
@@ -742,7 +859,6 @@ input[type="range"]:disabled {
   align-items: center;
   gap: 5px;
 }
-
 /* Selected date's time slots */
 .cal-detail {
   margin-top: 10px;
@@ -786,151 +902,7 @@ input[type="range"]:disabled {
   color: var(--tx3);
 }
 
-/* "설정 보기" highlights the weekday row it jumps to */
-@keyframes day-flash {
-  from {
-    background: var(--blue-soft);
-  }
-  to {
-    background: transparent;
-  }
-}
-.day.flash {
-  animation: day-flash 1.4s ease-out;
-}
-
-/* Editable title */
-.title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-}
-.title-row h1 {
-  margin: 0;
-  padding: 2px 6px;
-  margin-left: -6px;
-  border-radius: 8px;
-  outline: none;
-  cursor: text;
-  min-width: 40px;
-}
-.title-row h1:hover {
-  background: var(--field);
-}
-.title-row h1:focus {
-  background: var(--card);
-  box-shadow: inset 0 0 0 1.5px var(--blue);
-}
-.title-row .icon-mini {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.title-row:hover .icon-mini,
-.title-row .icon-mini:focus-visible {
-  opacity: 1;
-}
-.title-row h1:focus + .icon-mini {
-  display: none;
-}
-
-/* Sticky header: title on the left, schedule status + start/stop on the right */
-:root {
-  --header-h: 72px;
-}
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  height: var(--header-h);
-  margin-top: -24px; /* sit flush with the window top, body padding included */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--bg);
-}
-.app-header .title-row {
-  flex: 1;
-  min-width: 0;
-}
-.sched-ctl {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-  min-width: 0;
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  max-width: 360px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--card);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx2);
-}
-.status-pill span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--line2);
-  flex: none;
-}
-.status-pill.active {
-  color: var(--green);
-}
-.status-pill.active .status-dot {
-  background: var(--green);
-}
-.status-pill.playing {
-  color: var(--blue);
-}
-.status-pill.playing .status-dot {
-  background: var(--blue);
-  animation: status-pulse 1.4s ease-in-out infinite;
-}
-.status-pill.warn {
-  color: var(--amber, #c77a14);
-}
-.status-pill.warn .status-dot {
-  background: #c77a14;
-}
-@keyframes status-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0);
-  }
-}
-
-/* Narrow window: header wraps and nothing is pinned */
-@media (max-width: 760px) {
-  .app-header {
-    position: static;
-    height: auto;
-    margin-top: 0;
-    padding-bottom: 12px;
-    flex-wrap: wrap;
-  }
-  .player-card {
-    top: 0;
-  }
-}
-
-/* Toast: short notice at the bottom centre */
+/* ---------- Toast: short notice at the bottom centre ---------- */
 .toast {
   position: fixed;
   left: 50%;
@@ -955,44 +927,88 @@ input[type="range"]:disabled {
   transform: translate(-50%, 0);
 }
 
-/* Slot time problems: red for overlap / same start and stop, amber for a stop on the next day */
-.slot.error {
-  border-color: rgba(212, 47, 61, 0.45);
-  background: rgba(226, 58, 72, 0.04);
+/* Thin, quiet scrollbars (weekday list, calendar, playlist) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-.slot.warn {
-  border-color: rgba(199, 122, 20, 0.45);
-  background: rgba(199, 122, 20, 0.05);
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--line2);
 }
-.slot-issue {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
+::-webkit-scrollbar-thumb:hover {
+  background: #b8c1ce;
 }
-.slot.error .slot-issue {
-  color: var(--red);
-}
-.slot.warn .slot-issue {
-  color: #c77a14;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-/* "PC 시작 시 자동 실행" switch in the header */
-.autostart {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx2);
-  white-space: nowrap;
+/* ---------- Narrow window: one column, header wraps, the page scrolls ---------- */
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-header {
+    height: auto;
+    margin-top: 0;
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+  }
 }
-.autostart[hidden] {
-  display: none;
-}
-.autostart:has(input:disabled) {
-  opacity: 0.5;
-}
-.autostart input:disabled {
-  cursor: default;
+
+/* ---------- Wide window: app layout that fits the window ----------
+ * The page itself doesn't scroll. Header, calendar and player stay put, and only the
+ * weekday list scrolls inside its card, so every card keeps its full outline.
+ */
+@media (min-width: 761px) {
+  html,
+  body {
+    overflow: hidden; /* also stops scrollIntoView from shifting the whole page */
+  }
+  body {
+    height: 100vh;
+    padding-bottom: 16px;
+  }
+  .wrap {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .app-header {
+    flex: none;
+  }
+  .layout {
+    flex: 1;
+    min-height: 0;
+  }
+  /* Scrolls only if the window is very short; the padding keeps the card shadow from being clipped */
+  .side {
+    max-height: 100%;
+    overflow-y: auto;
+    margin: -4px -10px 0;
+    padding: 4px 10px 10px;
+  }
+  .main {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .player-card {
+    flex: none;
+  }
+  .schedule-card {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .schedule-card .days {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-right: -12px; /* room for the scrollbar inside the card padding */
+    padding-right: 12px;
+  }
 }

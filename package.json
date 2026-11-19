@@ -15,7 +15,17 @@
     },
     "directories": {
       "output": "dist"
-    }
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!docs/**",
+      "!scripts/**",
+      "!build/**",
+      "!*.md",
+      "!설치안내.txt",
+      "!.gitignore"
+    ]
   },
   "devDependencies": {
     "electron": "^28.3.3",
