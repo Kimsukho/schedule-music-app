@@ -267,6 +267,7 @@ svg {
 .icon-mini {
   width: 28px;
   height: 28px;
+  padding: 0; /* the default button padding pushed the icon 1px off centre */
   border: 0;
   border-radius: 8px;
   display: grid;
@@ -416,6 +417,7 @@ select:disabled {
 .icon-btn {
   width: 40px;
   height: 40px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   display: grid;
@@ -1026,4 +1028,87 @@ input[type="range"]:disabled {
     margin-right: -12px; /* room for the scrollbar inside the card padding */
     padding-right: 12px;
   }
+}
+
+/* Song order list inside a slot */
+.icon-mini.on {
+  background: var(--field);
+  color: var(--tx);
+}
+.track-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.track-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  font-size: 13px;
+}
+.track-list .tnum {
+  width: 18px;
+  flex: none;
+  text-align: right;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+}
+.track-list .tname {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-list .tlen {
+  flex: none;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+}
+.track-list .tlen.bad {
+  color: var(--red);
+}
+.track-list .icon-mini {
+  width: 24px;
+  height: 24px;
+}
+.track-list .icon-mini:disabled {
+  opacity: 0.3;
+  cursor: default;
+  background: transparent;
+  color: var(--tx2);
+}
+
+/* Tooltip drawn by render.js in place of the browser's own.
+ * Light card with dark text (easier on the eyes than white on black); words don't break mid-word. */
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(460px, calc(100vw - 16px));
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--tx2);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  box-shadow: 0 4px 14px rgba(27, 35, 48, 0.12);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+.tooltip.show {
+  opacity: 1;
+  transform: none;
 }

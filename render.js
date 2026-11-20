@@ -20,7 +20,11 @@ const STORAGE_KEY = "schedule-player-days";
 const ICON_PLAY = `<svg viewBox="0 0 24 24"><path d="${PLAY_PATH}" /></svg>`;
 const ICON_CLEAR = `<svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>`;
 const ICON_SETTINGS = `<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" /></svg>`;
-const ICON_DELETE =`<svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg>`;
+// Up/down arrows: symmetric, so it sits visually in the middle of the button
+const ICON_ORDER = `<svg viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3 5 6.99h3V14h2V6.99h3L9 3z" /></svg>`;
+const ICON_UP = `<svg viewBox="0 0 24 24"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" /></svg>`;
+const ICON_DOWN = `<svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" /></svg>`;
+const ICON_DELETE = `<svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg>`;
 
 const DAYS = [
   { name: "월", dow: 1 },
@@ -53,6 +57,16 @@ function toFileUrl(path) {
  */
 const newSlot = (h, m) => ({ h, m, eh: (h + 1) % 24, em: m, tracks: [] });
 
+// A song can be played when its file is still there (missing) and could be read (broken)
+const usable = (t) => !t.missing && !t.broken;
+function fileExists(p) {
+  try {
+    return !p || require("fs").existsSync(p);
+  } catch (e) {
+    return true; // can't tell (plain browser): assume it's there
+  }
+}
+
 function loadTracks(list) {
   return (list || [])
     .map((t) => ({
@@ -60,6 +74,7 @@ function loadTracks(list) {
       path: t.path,
       src: toFileUrl(t.path),
       duration: typeof t.duration === "number" ? t.duration : null, // seconds, filled in by probeDurations()
+      missing: !fileExists(t.path), // moved or deleted since it was picked
     }))
     .filter((t) => t.src);
 }
@@ -94,6 +109,7 @@ let currentIndex = 0;
 let currentLabel = null; // 예: "월요일 07:00~08:00"
 let playingLabel = null; // 스케줄로 재생 중일 때 상태 배지에 표시할 문구
 let stopAt = null; // 스케줄 재생을 멈출 시각 (ms), 종료 시간이 없으면 null
+let wantsPlay = false; // true while the player is supposed to be playing (see the "error" listener)
 let pickTarget = null; // 곡 선택 창을 연 { i: 요일, j: 시간대 }
 let isScheduled = false;
 let lastFired = null;
@@ -118,7 +134,7 @@ const startMin = (slot) => slot.h * 60 + slot.m;
 // Same start and stop time: shown as an error and never played
 const zeroLength = (slot) => slot.eh !== null && slot.eh * 60 + slot.em === startMin(slot);
 // Has songs and a usable time window
-const playable = (slot) => slot.tracks.some((t) => !t.missing) && !zeroLength(slot);
+const playable = (slot) => slot.tracks.some(usable) && !zeroLength(slot);
 
 function save() {
   try {
@@ -218,29 +234,49 @@ function toastSlotIssue(i, slot) {
 
 // --- 곡 길이 ---
 // Read each song's length once from its file metadata and keep it with the schedule.
-// A file that can't be opened (moved or deleted) is marked missing.
+// A file that is gone is marked missing; one that is there but can't be read
+// (not audio, damaged, unsupported format, 0 seconds long) is marked broken.
 const probing = new Set();
 let probeRenderTimer = null;
 
+// Resolves to the length in seconds, null when the length is unknown (e.g. a stream),
+// or undefined when the file can't be played.
 function probeDuration(src) {
   return new Promise((resolve) => {
     const a = new Audio();
+    const done = (v) => {
+      clearTimeout(timer);
+      a.removeAttribute("src");
+      a.load();
+      resolve(v);
+    };
+    const timer = setTimeout(() => done(undefined), 10000); // never answered: treat as unreadable
     a.preload = "metadata";
-    a.onloadedmetadata = () => resolve(isFinite(a.duration) ? a.duration : null);
-    a.onerror = () => resolve(undefined); // undefined = file not found / unreadable
+    a.onloadedmetadata = () => {
+      const d = a.duration;
+      if (d === Infinity) done(null); // stream-like file: plays, length unknown
+      else done(d > 0 ? d : undefined); // 0 seconds or NaN: nothing to play
+    };
+    a.onerror = () => done(undefined);
     a.src = src;
   });
+}
+
+// Why a song can't be played, for its path: gone, or there but unreadable
+function markUnplayable(t) {
+  if (fileExists(t.path)) t.broken = true;
+  else t.missing = true;
 }
 
 function probeDurations() {
   schedule.forEach((d) =>
     d.slots.forEach((s) =>
       s.tracks.forEach((t) => {
-        if (t.duration != null || t.missing || probing.has(t)) return;
+        if (t.duration != null || !usable(t) || probing.has(t)) return;
         probing.add(t);
         probeDuration(t.src).then((sec) => {
           probing.delete(t);
-          if (sec === undefined) t.missing = true;
+          if (sec === undefined) markUnplayable(t);
           else t.duration = sec;
           // Re-render once after a batch of files has been read
           clearTimeout(probeRenderTimer);
@@ -260,7 +296,7 @@ function probeDurations() {
 function slotMusicSeconds(slot) {
   let total = 0;
   for (const t of slot.tracks) {
-    if (t.missing) continue;
+    if (!usable(t)) continue;
     if (t.duration == null) return null;
     total += t.duration;
   }
@@ -292,7 +328,15 @@ function renderSlot(d, slot, j, issue) {
   // Song lengths, total always first: "총 2분 30초 · a.mp3 2:30", "총 3분 · a.mp3 0:30, b.mp3 2:30"
   const total = slotMusicSeconds(slot);
   const names = slot.tracks
-    .map((t) => (t.missing ? `${t.name} (파일 없음)` : t.duration != null ? `${t.name} ${fmt(t.duration)}` : t.name))
+    .map((t) =>
+      t.missing
+        ? `${t.name} (파일 없음)`
+        : t.broken
+          ? `${t.name} (재생 불가)`
+          : t.duration != null
+            ? `${t.name} ${fmt(t.duration)}`
+            : t.name,
+    )
     .join(", ");
   const summary = empty
     ? "곡 없음"
@@ -306,6 +350,13 @@ function renderSlot(d, slot, j, issue) {
     target && (slot.eh !== target.eh || slot.em !== target.em)
       ? `<button class="btn-mini" data-act="fit-end" title="종료를 ${pad(target.eh)}:${pad(target.em)}으로 맞춤">곡 길이에 맞춤</button>`
       : "";
+  // Song order: with two or more songs, a button opens the list to move songs up/down or take one out
+  const many = slot.tracks.length > 1;
+  const listOpen = many && openTrackLists.has(slot);
+  const orderBtn = many
+    ? `<button class="icon-mini${listOpen ? " on" : ""}" data-act="tracks-toggle" aria-expanded="${listOpen}" aria-label="${label} 곡 순서 바꾸기" title="곡 순서 바꾸기">${ICON_ORDER}</button>`
+    : "";
+  const trackList = listOpen ? renderTrackList(slot, label) : "";
   return `
     <div class="slot${issue ? ` ${issue.level}` : ""}" data-j="${j}">
       <div class="day-time">
@@ -319,15 +370,43 @@ function renderSlot(d, slot, j, issue) {
         <button class="icon-mini danger" data-act="del-slot" aria-label="${label} 삭제">${ICON_DELETE}</button>
       </div>
       <div class="day-music">
-        <button class="btn-mini" data-act="pick">${empty ? "곡 선택" : "곡 변경"}</button>
+        ${empty
+          ? `<button class="btn-mini" data-act="pick">곡 선택</button>`
+          : `<button class="btn-mini" data-act="add-tracks" title="지금 곡 뒤에 이어서 추가">곡 추가</button>`}
         <span class="day-tracks${empty ? " empty" : ""}" title="${summary}">${summary}</span>
         ${fitBtn}
+        ${orderBtn}
         ${empty ? "" : `
         <button class="icon-mini" data-act="preview" aria-label="${label} 미리듣기">${ICON_PLAY}</button>
         <button class="icon-mini" data-act="clear" aria-label="${label} 곡 비우기">${ICON_CLEAR}</button>`}
       </div>
+      ${trackList}
       ${note}
     </div>`;
+}
+
+// 곡 순서 바꾸기: 시간대 안에서 재생 순서대로 곡을 나열하고 위/아래로 옮기거나 뺌
+const openTrackLists = new Set(); // slots whose song list is open (not saved)
+
+function renderTrackList(slot, label) {
+  const last = slot.tracks.length - 1;
+  const rows = slot.tracks
+    .map((t, k) => {
+      const info = t.missing ? "파일 없음" : t.broken ? "재생 불가" : t.duration != null ? fmt(t.duration) : "";
+      const bad = t.missing || t.broken;
+      const name = escapeHtml(t.name);
+      return `
+        <li>
+          <span class="tnum">${k + 1}</span>
+          <span class="tname" title="${name}">${name}</span>
+          <span class="tlen${bad ? " bad" : ""}">${info}</span>
+          <button class="icon-mini" data-act="track-up" data-t="${k}" aria-label="${label} ${k + 1}번 곡 위로"${k === 0 ? " disabled" : ""}>${ICON_UP}</button>
+          <button class="icon-mini" data-act="track-down" data-t="${k}" aria-label="${label} ${k + 1}번 곡 아래로"${k === last ? " disabled" : ""}>${ICON_DOWN}</button>
+          <button class="icon-mini danger" data-act="track-remove" data-t="${k}" aria-label="${label} ${k + 1}번 곡 빼기">${ICON_CLEAR}</button>
+        </li>`;
+    })
+    .join("");
+  return `<ol class="track-list">${rows}</ol>`;
 }
 
 // 요일 접기: 켜진 요일도 접어서 한 줄로 볼 수 있음 (접은 상태는 저장)
@@ -620,8 +699,41 @@ daysEl.addEventListener("click", (e) => {
   }
 
   const j = Number(btn.closest(".slot").dataset.j);
-  if (act === "pick") {
-    pickTarget = { i, j };
+
+  // 곡 순서: 목록 열기/닫기, 위·아래로 옮기기, 한 곡 빼기
+  if (act === "tracks-toggle") {
+    const slot = day.slots[j];
+    if (openTrackLists.has(slot)) openTrackLists.delete(slot);
+    else openTrackLists.add(slot);
+    renderDays();
+    return;
+  }
+  if (act === "track-up" || act === "track-down" || act === "track-remove") {
+    const slot = day.slots[j];
+    const k = Number(btn.dataset.t);
+    if (act === "track-remove") {
+      slot.tracks.splice(k, 1);
+      if (slot.tracks.length < 2) openTrackLists.delete(slot);
+    } else {
+      const to = act === "track-up" ? k - 1 : k + 1;
+      if (to < 0 || to >= slot.tracks.length) return;
+      [slot.tracks[k], slot.tracks[to]] = [slot.tracks[to], slot.tracks[k]];
+    }
+    refresh();
+    // Keep keyboard focus on the same song's button after the list is redrawn
+    const moved = act === "track-up" ? k - 1 : act === "track-down" ? k + 1 : null;
+    if (moved !== null) {
+      const again = daysEl.querySelector(
+        `.day[data-i="${i}"] .slot[data-j="${j}"] [data-act="${act}"][data-t="${moved}"]`,
+      );
+      if (again && !again.disabled) again.focus();
+    }
+    return;
+  }
+
+  if (act === "pick" || act === "add-tracks") {
+    // 곡 변경: replace the list. 곡 추가: keep the songs and add the new ones after them.
+    pickTarget = { i, j, append: act === "add-tracks" };
     fileInput.value = "";
     fileInput.click();
   } else if (act === "preview") {
@@ -630,7 +742,7 @@ daysEl.addEventListener("click", (e) => {
     stopAt = null;
     loadSlotToPlayer(i, j);
     updateStatus();
-    audioPlayer.play();
+    audioPlayer.play().catch(() => {}); // a bad file is handled by the "error" listener
   } else if (act === "fit-end") {
     // 종료 시간을 곡 길이에 맞춤 (겹치면 막고 원래대로)
     const slot = day.slots[j];
@@ -680,21 +792,44 @@ document.querySelectorAll("[data-preset]").forEach((chip) => {
   });
 });
 
-// 1. 시간대별 곡 선택 (선택한 시간대의 목록을 새로 채움)
-fileInput.addEventListener("change", (event) => {
+// 1. 시간대별 곡 선택: 곡 변경은 목록을 새로 채우고, 곡 추가는 지금 곡 뒤에 이어 붙임
+// 재생할 수 없는 파일(음악이 아님, 손상, 지원하지 않는 형식, 0초)은 넣지 않고 알려줌
+fileInput.addEventListener("change", async (event) => {
   const files = event.target.files;
   if (!pickTarget || !files || files.length === 0) return;
   const slot = schedule[pickTarget.i].slots[pickTarget.j];
+  const append = pickTarget.append;
   pickTarget = null;
   if (!slot) return;
-  slot.tracks = Array.from(files).map((file) => {
+  const picked = Array.from(files).map((file) => {
     const src = file.path ? toFileUrl(file.path) : null;
     return src
       ? { name: file.name, path: file.path, src, duration: null }
       : { name: file.name, path: null, src: URL.createObjectURL(file), duration: null };
   });
+  showToast(`곡 ${picked.length}개를 확인하는 중…`);
+  const lengths = await Promise.all(picked.map((t) => probeDuration(t.src)));
+  const good = [];
+  const bad = [];
+  picked.forEach((t, k) => {
+    if (lengths[k] === undefined) {
+      bad.push(t.name);
+      if (!t.path) URL.revokeObjectURL(t.src);
+    } else {
+      t.duration = lengths[k];
+      good.push(t);
+    }
+  });
+  const why = "(음악 파일이 아니거나 손상, 지원하지 않는 형식)";
+  if (good.length === 0) {
+    // Keep the songs the slot already had
+    showToast(`재생할 수 있는 파일이 없어 ${append ? "추가하지" : "곡을 바꾸지"} 않았습니다: ${bad.join(", ")} ${why}`);
+    return;
+  }
+  slot.tracks = append ? slot.tracks.concat(good) : good;
   refresh();
-  probeDurations(); // 곡 길이 읽기
+  const done = append ? `곡 ${good.length}개를 뒤에 추가했습니다` : `곡 ${good.length}개를 넣었습니다`;
+  showToast(bad.length ? `${done}. 재생할 수 없는 파일 ${bad.length}개는 뺐습니다: ${bad.join(", ")} ${why}` : `${done}.`);
 });
 
 // Earliest playable slot from now, within the coming week.
@@ -743,7 +878,7 @@ function updateStatus() {
 // 2. 플레이어에 시간대의 곡 목록 불러오기
 function loadSlotToPlayer(i, j) {
   const slot = schedule[i].slots[j];
-  currentTracks = slot.tracks.filter((t) => !t.missing); // skip files that can't be found
+  currentTracks = slot.tracks.filter(usable); // skip files that are gone or unreadable
   currentLabel = `${DAYS[i].name}요일 ${rangeText(slot)}`;
   renderPlaylist();
   loadTrack(0);
@@ -944,6 +1079,8 @@ function startSlotPlayback(i, j, stopAtMs) {
       sendSystemNotification(label, slot.tracks.length);
     })
     .catch((err) => {
+      // A song that can't be decoded is handled by the "error" listener (skips to the next song)
+      if (err.name === "NotSupportedError" || err.name === "AbortError") return;
       playingLabel = null;
       stopAt = null;
       updateStatus();
@@ -998,9 +1135,10 @@ setInterval(() => {
 playBtn.addEventListener("click", () => {
   if (currentTracks.length === 0) return;
   if (audioPlayer.paused) {
-    audioPlayer.play();
+    audioPlayer.play().catch(() => {});
   } else {
     // A manual pause ends the scheduled play. Track switches and slot changes don't come through here.
+    wantsPlay = false;
     playingLabel = null;
     stopAt = null;
     audioPlayer.pause();
@@ -1010,6 +1148,7 @@ playBtn.addEventListener("click", () => {
 
 // 스케줄 재생 끝내기: 종료 시각 도달, 목록 끝, 정지 버튼
 function finishScheduledPlay() {
+  wantsPlay = false;
   playingLabel = null;
   stopAt = null;
   audioPlayer.pause();
@@ -1028,14 +1167,64 @@ seek.addEventListener("input", () => {
 audioPlayer.addEventListener("ended", () => {
   if (currentIndex < currentTracks.length - 1) {
     loadTrack(currentIndex + 1);
-    audioPlayer.play();
+    audioPlayer.play().catch(() => {}); // a bad file is handled by the "error" listener
   } else if (stopAt !== null && Date.now() < stopAt) {
     loadTrack(0);
-    audioPlayer.play();
+    audioPlayer.play().catch(() => {});
   } else {
     finishScheduledPlay();
   }
 });
+
+// 재생 중 오류 (재생 도중 파일이 지워짐, 파일 일부가 손상 등)
+// 그 곡을 "파일 없음"/"재생 불가"로 표시하고 다음 곡으로 넘어감.
+// 목록에 재생할 수 있는 곡이 하나도 없으면 멈추고 화면과 Windows 알림으로 알림.
+audioPlayer.addEventListener("play", () => {
+  wantsPlay = true;
+});
+
+audioPlayer.addEventListener("error", () => {
+  const t = currentTracks[currentIndex];
+  // Ignore errors from merely loading a song while stopped (e.g. resetting to the first song)
+  if (!t || !wantsPlay) return;
+  markUnplayable(t);
+  save();
+  renderDays();
+  renderCalendar();
+  renderPlaylist();
+
+  const label = playingLabel || currentLabel;
+  const next = nextUsableIndex(currentIndex);
+  if (next === -1) {
+    finishScheduledPlay();
+    const msg = `${label}: 재생할 수 있는 곡이 없어 멈췄습니다. 곡을 다시 선택해주세요.`;
+    showToast(msg);
+    notifyProblem(msg);
+    return;
+  }
+  showToast(`${t.name}을(를) 재생할 수 없어 다음 곡으로 넘어갑니다.`);
+  loadTrack(next);
+  audioPlayer.play().catch(() => {});
+});
+
+// Next playable song after `from`. Wraps to the top only while a stop time is still ahead;
+// otherwise the list is over. -1 when there is none.
+function nextUsableIndex(from) {
+  const n = currentTracks.length;
+  const canWrap = stopAt !== null && Date.now() < stopAt;
+  for (let step = 1; step <= n; step++) {
+    const k = from + step;
+    if (k >= n && !canWrap) return -1;
+    if (usable(currentTracks[k % n])) return k % n;
+  }
+  return -1;
+}
+
+function notifyProblem(message) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("스케줄 음악 재생 문제", { body: message });
+  }
+}
 
 function syncProgress() {
   const d = audioPlayer.duration || 0;
@@ -1274,3 +1463,90 @@ if (savedScheduleOn()) {
 window.addEventListener("scroll", () => {
   if (window.innerWidth > 760 && window.scrollY !== 0) window.scrollTo(0, 0);
 });
+
+// 9. 툴팁: 브라우저 기본 툴팁 대신 앱 스타일로 그림
+// Elements keep using the title attribute. On hover it is moved to data-tip (so the browser's own
+// tooltip never shows) and drawn in a styled box above the element, or below near the top edge.
+const tip = document.createElement("div");
+tip.className = "tooltip";
+tip.setAttribute("role", "tooltip");
+document.body.append(tip);
+let tipTarget = null;
+let tipTimer = null;
+
+function tipTextOf(el) {
+  if (el.hasAttribute("title")) {
+    el.dataset.tip = el.getAttribute("title");
+    el.removeAttribute("title");
+  }
+  return el.dataset.tip || "";
+}
+
+function placeTip(el) {
+  const r = el.getBoundingClientRect();
+  const w = tip.offsetWidth;
+  const h = tip.offsetHeight;
+  let top = r.top - h - 8;
+  if (top < 4) top = r.bottom + 8; // no room above: show below
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+  tip.style.top = `${top}px`;
+  tip.style.left = `${left}px`;
+}
+
+function showTip(el) {
+  const text = tipTextOf(el);
+  if (!text || el === document.activeElement && el.isContentEditable) return;
+  tip.textContent = text;
+  tip.classList.add("show");
+  placeTip(el);
+}
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  tipTarget = null;
+  tip.classList.remove("show");
+}
+
+function tipTargetFrom(node) {
+  return node && node.closest ? node.closest("[title], [data-tip]") : null;
+}
+
+document.addEventListener("mouseover", (e) => {
+  const el = tipTargetFrom(e.target);
+  if (el === tipTarget) return;
+  hideTip();
+  if (!el) return;
+  tipTextOf(el); // take the title away right away so the browser tooltip doesn't start
+  tipTarget = el;
+  tipTimer = setTimeout(() => showTip(el), 350);
+});
+document.addEventListener("mouseout", (e) => {
+  if (tipTarget && !tipTarget.contains(e.relatedTarget)) hideTip();
+});
+// Keyboard users get the same hint when a control gets focus
+document.addEventListener("focusin", (e) => {
+  const el = tipTargetFrom(e.target);
+  if (el && el === e.target && e.target.matches(":focus-visible")) {
+    tipTarget = el;
+    showTip(el);
+  }
+});
+document.addEventListener("focusout", hideTip);
+document.addEventListener("mousedown", hideTip);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") hideTip();
+});
+window.addEventListener("scroll", hideTip, true);
+
+// Titles set later from code (e.g. the status pill) are moved too, and the open tooltip follows
+new MutationObserver((records) => {
+  for (const rec of records) {
+    const el = rec.target;
+    if (!el.hasAttribute("title")) continue;
+    tipTextOf(el);
+    if (el === tipTarget && tip.classList.contains("show")) {
+      tip.textContent = el.dataset.tip;
+      placeTip(el);
+    }
+  }
+}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["title"] });
