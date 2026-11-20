@@ -1,6 +1,6 @@
 {
   "name": "schedule-music-app",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "요일·시간대별로 정해진 음악을 자동 재생하는 Windows 데스크톱 앱",
   "author": "SUK-HO KIM",
   "main": "main.js",

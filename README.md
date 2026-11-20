@@ -107,7 +107,7 @@ npm start
 npm run release
 ```
 
-- 결과: `releases\schedule-music-app Setup <버전>.exe` (지금은 1.0.0, 1.1.0, 1.2.0 보관 중)
+- 결과: `releases\schedule-music-app Setup <버전>.exe` (지금은 1.0.0, 1.1.0, 1.2.0, 1.3.0 보관 중)
 - 확인용으로 빌드만 하려면 `npm run build`를 씁니다. 결과는 `dist\`에만 생깁니다.
 - 새 버전을 낼 때는 먼저 `package.json`의 `version`을 올립니다. 같은 버전으로 다시 만들면 `releases\`의 같은 파일이 바뀝니다.
 - `releases\`는 설치 파일이 커서(약 76MB) git에 올리지 않고 이 PC에만 보관합니다.
