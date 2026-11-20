@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require("electron");
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog } = require("electron");
+const fs = require("fs");
 const path = require("path");
 
 // --- 핫렐로드 (개발 실행일 때만) ---
@@ -31,6 +32,27 @@ let mainWindow = null;
 let tray = null;
 let quitting = false;
 let trayHintShown = false;
+let scheduleOn = false; // reported by the page with each status update
+
+// --- 창 닫기(✕) 동작: "ask" 물어보기 / "hide" 트레이로 숨기기 / "quit" 종료 ---
+const CLOSE_ACTIONS = { ask: "물어보기", hide: "트레이로 숨기기", quit: "종료" };
+const settingsFile = () => path.join(app.getPath("userData"), "window-settings.json");
+function loadCloseAction() {
+  try {
+    const v = JSON.parse(fs.readFileSync(settingsFile(), "utf8")).closeAction;
+    return CLOSE_ACTIONS[v] ? v : "ask";
+  } catch (e) {
+    return "ask";
+  }
+}
+let closeAction = "ask";
+function setCloseAction(v) {
+  closeAction = v;
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify({ closeAction: v }));
+  } catch (e) {}
+  updateTrayMenu();
+}
 
 // 앱은 하나만 실행: 두 번째로 실행하면 기존 창을 띄움
 if (!app.requestSingleInstanceLock()) {
@@ -39,6 +61,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", () => showWindow());
   app.whenReady().then(() => {
     app.setAppUserModelId("com.example.schedulemusic"); // Windows notifications
+    closeAction = loadCloseAction();
     createWindow();
     createTray();
   });
@@ -52,6 +75,10 @@ function createWindow() {
     icon: path.join(__dirname, "assets", "icon.png"),
     // Hide the File/Edit/View menu bar (Alt shows it; shortcuts like Ctrl+R still work)
     autoHideMenuBar: true,
+    // 기본 제목 표시줄 대신 앱 헤더가 그 자리를 씀. ─ □ ✕ 버튼은 Windows가 앱 배경색으로 그림.
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#f0f2f5", symbolColor: "#1b2330", height: 48 },
+    backgroundColor: "#f0f2f5",
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // 실무에선 보안상 true 권장
@@ -65,19 +92,115 @@ function createWindow() {
     if (!startedHidden) mainWindow.show();
   });
 
-  // 창을 닫아도 종료하지 않고 트레이로 숨김 (스케줄은 계속 동작)
+  // 창 닫기(✕): 트레이로 숨길지(스케줄 계속) 종료할지 물어봄. "다시 묻지 않기"로 고정할 수 있음.
+  // Started with Windows (unattended PC): closing just hides, as before.
   mainWindow.on("close", (e) => {
     if (quitting) return;
     e.preventDefault();
-    mainWindow.hide();
-    if (!trayHintShown && tray && process.platform === "win32") {
-      trayHintShown = true;
-      tray.displayBalloon({
-        title: "스케줄 음악 플레이어",
-        content: "창을 닫아도 트레이에서 계속 실행됩니다. 종료하려면 트레이 아이콘 메뉴에서 '종료'를 누르세요.",
-      });
+    if (startedHidden || closeAction === "hide") return hideToTray();
+    if (closeAction === "quit") return requestQuit();
+    askOnClose();
+  });
+
+  // Ctrl+Q: quit (with the same check as the tray menu)
+  mainWindow.webContents.on("before-input-event", (e, input) => {
+    if (input.type === "keyDown" && input.control && !input.alt && input.key.toLowerCase() === "q") {
+      e.preventDefault();
+      requestQuit();
     }
   });
+}
+
+function hideToTray() {
+  mainWindow.hide();
+  if (!trayHintShown && tray && process.platform === "win32") {
+    trayHintShown = true;
+    tray.displayBalloon({
+      title: "스케줄 플레이어",
+      content: "트레이에서 계속 실행됩니다. 종료하려면 트레이 아이콘을 우클릭해 '종료'를 누르세요.",
+    });
+  }
+}
+
+// While the window is open the page asks in its own style (render.js showConfirm);
+// when it is hidden in the tray, the Windows message box is used instead.
+let pendingAsk = null;
+function askInWindow(kind) {
+  if (pendingAsk) return Promise.resolve({ choice: "cancel" }); // one question at a time
+  return new Promise((resolve) => {
+    pendingAsk = resolve;
+    mainWindow.webContents.send("ask", kind, { scheduleOn });
+  });
+}
+// The page dims itself behind a confirm box; dim the ─ □ ✕ area to the same shade
+const OVERLAY = { color: "#f0f2f5", symbolColor: "#1b2330", height: 48 };
+ipcMain.on("overlay-dim", (_e, dim) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.setTitleBarOverlay(dim ? { ...OVERLAY, color: "#b4b8be" } : OVERLAY); // #f0f2f5 under rgba(27,35,48,.28)
+  } catch (e) {}
+});
+ipcMain.on("ask-answer", (_e, answer) => {
+  const resolve = pendingAsk;
+  pendingAsk = null;
+  if (resolve) resolve(answer || { choice: "cancel" });
+});
+const windowOpen = () => mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized();
+
+async function askOnClose() {
+  if (windowOpen()) {
+    const { choice, remember } = await askInWindow("close");
+    if (choice === "cancel") return;
+    if (remember) setCloseAction(choice === "hide" ? "hide" : "quit");
+    if (choice === "hide") hideToTray();
+    else quitNow();
+    return;
+  }
+  const { response, checkboxChecked } = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    title: "스케줄 플레이어",
+    message: "창을 닫을까요?",
+    detail: scheduleOn
+      ? "트레이로 숨기면 스케줄이 계속 동작합니다.\n종료하면 예정된 음악이 재생되지 않습니다."
+      : "트레이로 숨기면 앱이 계속 실행됩니다.",
+    buttons: ["트레이로 숨기기", "종료", "취소"],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    checkboxLabel: "다시 묻지 않기",
+  });
+  if (response === 2) return;
+  if (checkboxChecked) setCloseAction(response === 0 ? "hide" : "quit");
+  if (response === 0) hideToTray();
+  else quitNow(); // the dialog already said what quitting means
+}
+
+// 종료: 스케줄이 켜져 있으면 예정된 음악이 재생되지 않는다고 한 번 확인
+async function requestQuit() {
+  if (scheduleOn && windowOpen()) {
+    const { choice } = await askInWindow("quit");
+    if (choice === "quit") quitNow();
+    return;
+  }
+  if (scheduleOn) {
+    const { response } = await dialog.showMessageBox(mainWindow && mainWindow.isVisible() ? mainWindow : null, {
+      type: "warning",
+      title: "스케줄 플레이어",
+      message: "종료할까요?",
+      detail: "스케줄이 켜져 있습니다. 종료하면 예정된 음악이 재생되지 않습니다.",
+      buttons: ["종료", "취소"],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response !== 0) return;
+  }
+  quitNow();
+}
+
+function quitNow() {
+  quitting = true;
+  app.quit();
 }
 
 function showWindow() {
@@ -117,7 +240,7 @@ function drawnTrayIcon() {
 
 function createTray() {
   tray = new Tray(trayIcon());
-  tray.setToolTip("스케줄 음악 플레이어");
+  tray.setToolTip("스케줄 플레이어");
   tray.on("click", showWindow);
   tray.on("double-click", showWindow);
   updateTrayMenu();
@@ -134,14 +257,17 @@ function updateTrayMenu() {
       checked: getAutostart(),
       click: (item) => setAutostart(item.checked),
     },
-    { type: "separator" },
     {
-      label: "종료",
-      click: () => {
-        quitting = true;
-        app.quit();
-      },
+      label: "창을 닫으면",
+      submenu: Object.entries(CLOSE_ACTIONS).map(([value, label]) => ({
+        label,
+        type: "radio",
+        checked: closeAction === value,
+        click: () => setCloseAction(value),
+      })),
     },
+    { type: "separator" },
+    { label: "종료", accelerator: "Ctrl+Q", click: requestQuit },
   ]);
   tray.setContextMenu(menu);
 }
@@ -165,8 +291,9 @@ ipcMain.handle("autostart:get", () => ({ available: app.isPackaged, on: getAutos
 ipcMain.handle("autostart:set", (_e, on) => setAutostart(!!on));
 
 // 스케줄 상태를 트레이 아이콘 툴팁에 표시
-ipcMain.on("status", (_e, text) => {
-  if (tray) tray.setToolTip(`스케줄 음악 플레이어\n${text}`.slice(0, 127));
+ipcMain.on("status", (_e, text, on) => {
+  scheduleOn = !!on;
+  if (tray) tray.setToolTip(`스케줄 플레이어\n${text}`.slice(0, 127));
 });
 
 app.on("before-quit", () => {

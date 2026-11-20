@@ -18,7 +18,7 @@
   --field: rgba(38, 54, 82, 0.075);
   --field2: rgba(38, 54, 82, 0.12);
   --track: #dde3eb;
-  --header-h: 72px;
+  --header-h: 48px; /* also the height of the window title bar area (main.js titleBarOverlay) */
 }
 
 /* ---------- Base ---------- */
@@ -57,14 +57,25 @@ svg {
 }
 
 /* ---------- Layout: header, calendar left, player + schedule right ---------- */
+/* The header is also the window title bar: drag it to move the window, double-click to maximise.
+   Its right side leaves room for the Windows ─ □ ✕ buttons drawn over the top-right corner. */
 .app-header {
   height: var(--header-h);
   margin-top: -24px; /* the body padding is part of the header row */
+  margin-bottom: 8px;
+  padding-right: var(--header-pad-right, 0px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   background: var(--bg);
+  -webkit-app-region: drag;
+}
+.app-header h1,
+.app-header button,
+.app-header .switch,
+.app-header .status-pill {
+  -webkit-app-region: no-drag;
 }
 .layout {
   display: grid;
@@ -849,7 +860,9 @@ input[type="range"]:disabled {
 }
 .cal-legend {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  white-space: nowrap; /* one line: 곡 있음 · 곡 없음 · (점 1개 = 시간대 1개) */
+  gap: 10px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
@@ -1025,8 +1038,8 @@ input[type="range"]:disabled {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    margin-right: -12px; /* room for the scrollbar inside the card padding */
-    padding-right: 12px;
+    margin-right: -16px; /* the scrollbar sits in the card padding, 8px clear of the content */
+    padding-right: 16px;
   }
 }
 
@@ -1111,4 +1124,97 @@ input[type="range"]:disabled {
 .tooltip.show {
   opacity: 1;
   transform: none;
+}
+
+/* In-app confirm box (close / quit), replacing the Windows message box while the window is open */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(27, 35, 48, 0.28);
+  -webkit-app-region: no-drag;
+}
+.modal {
+  width: min(420px, 100%);
+  padding: 22px 22px 18px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 16px 40px rgba(27, 35, 48, 0.22);
+}
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.modal p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--tx2);
+  white-space: pre-line;
+  word-break: keep-all; /* break Korean lines between words, not inside them */
+}
+.modal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--tx2);
+  cursor: pointer;
+}
+.modal-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.modal-actions .btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+/* Quitting with the schedule on is the one destructive choice: red */
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover {
+  filter: brightness(1.08);
+}
+
+/* Calendar legend note, schedule card tweaks from the UI review */
+.cal-legend-note {
+  font-size: 10px;
+  line-height: 1; /* same middle line as the legend items next to it */
+  color: var(--tx3);
+  opacity: 0.75;
+}
+/* Preset chip matching the days that are on now */
+.card-head .chip.on {
+  background: var(--card);
+  color: var(--blue);
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+
+/* Focus rings only for keyboard use (render.js sets body.pointer while the mouse is used) */
+body.pointer :focus-visible {
+  outline: none;
+}
+/* Keep the ✕ (remove all songs) a step away from ▶, and the song text clear of the buttons */
+.day-music .clear-tracks {
+  margin-left: 6px;
+}
+.day-tracks {
+  margin-right: 10px;
 }

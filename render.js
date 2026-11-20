@@ -340,7 +340,7 @@ function renderSlot(d, slot, j, issue) {
     .join(", ");
   const summary = empty
     ? "곡 없음"
-    : escapeHtml(total ? `총 ${lengthText(total)} · ${names}` : names);
+    : escapeHtml(total ? `곡 ${lengthText(total)} · ${names}` : names); // songs' total, not the slot length
   const note = issue
     ? `<p class="slot-issue" role="alert">${escapeHtml(issue.msgs.join(" · "))}</p>`
     : "";
@@ -367,7 +367,7 @@ function renderSlot(d, slot, j, issue) {
         <select data-k="eh" aria-label="${label} 종료 시">${options(24, slot.eh, true)}</select>
         <span>:</span>
         <select data-k="em" aria-label="${label} 종료 분"${slot.eh === null ? " disabled" : ""}>${options(60, slot.em)}</select>
-        <button class="icon-mini danger" data-act="del-slot" aria-label="${label} 삭제">${ICON_DELETE}</button>
+        <button class="icon-mini danger" data-act="del-slot" aria-label="${label} 삭제" title="시간대 삭제">${ICON_DELETE}</button>
       </div>
       <div class="day-music">
         ${empty
@@ -377,8 +377,8 @@ function renderSlot(d, slot, j, issue) {
         ${fitBtn}
         ${orderBtn}
         ${empty ? "" : `
-        <button class="icon-mini" data-act="preview" aria-label="${label} 미리듣기">${ICON_PLAY}</button>
-        <button class="icon-mini" data-act="clear" aria-label="${label} 곡 비우기">${ICON_CLEAR}</button>`}
+        <button class="icon-mini" data-act="preview" aria-label="${label} 미리듣기" title="미리듣기">${ICON_PLAY}</button>
+        <button class="icon-mini danger clear-tracks" data-act="clear" aria-label="${label} 곡 모두 빼기" title="이 시간대의 곡 모두 빼기">${ICON_CLEAR}</button>`}
       </div>
       ${trackList}
       ${note}
@@ -531,6 +531,7 @@ function refresh() {
   renderDays();
   updateStatus();
   renderCalendar();
+  renderPresetState();
 }
 
 daysEl.addEventListener("change", (e) => {
@@ -760,12 +761,36 @@ daysEl.addEventListener("click", (e) => {
     }
     refresh();
     showToast(`${slotName(i, slot)}: 종료를 곡 길이에 맞췄습니다.`);
-  } else if (act === "clear") {
-    day.slots[j].tracks = [];
-    refresh();
-  } else if (act === "del-slot") {
-    day.slots.splice(j, 1);
-    refresh();
+  } else if (act === "clear" || act === "del-slot") {
+    // Both throw songs away, so ask first (a mis-click on ✕ or the bin used to wipe them silently)
+    const slot = day.slots[j];
+    const name = slotName(i, slot);
+    const songs = slot.tracks.length;
+    if (act === "del-slot" && songs === 0) {
+      day.slots.splice(j, 1);
+      refresh();
+      return;
+    }
+    showConfirm({
+      title: act === "clear" ? "곡을 모두 뺄까요?" : "시간대를 삭제할까요?",
+      detail:
+        act === "clear"
+          ? `${name} 시간대의 곡 ${songs}개를 모두 뺍니다. 음악 파일은 지워지지 않습니다.`
+          : `${name} 시간대와 곡 ${songs}개를 삭제합니다. 음악 파일은 지워지지 않습니다.`,
+      buttons: [
+        { id: "cancel", label: "취소", kind: "ghost", focus: true },
+        { id: "ok", label: act === "clear" ? "모두 빼기" : "삭제", kind: "danger" },
+      ],
+    }).then(({ choice }) => {
+      if (choice !== "ok" || !day.slots.includes(slot)) return;
+      if (act === "clear") {
+        slot.tracks = [];
+        openTrackLists.delete(slot);
+      } else {
+        day.slots.splice(day.slots.indexOf(slot), 1);
+      }
+      refresh();
+    });
   }
 });
 
@@ -788,9 +813,30 @@ document.querySelectorAll("[data-preset]").forEach((chip) => {
       if (clash) skipped.push(`${DAYS[i].name}요일(${clash})`);
     });
     refresh();
-    if (skipped.length > 0) showToast(`시간대가 겹쳐서 켜지 않았습니다: ${skipped.join(", ")}`);
+    // Say what changed, so a mis-click is noticed
+    const onNames = DAYS.filter((d, i) => schedule[i].on).map((d) => d.name).join("·");
+    let msg = p === "none" ? "모든 요일을 껐습니다." : `${chip.textContent.trim()}: ${onNames || "없음"}요일을 켰습니다.`;
+    if (skipped.length > 0) msg += ` 시간대가 겹쳐서 켜지 않음: ${skipped.join(", ")}`;
+    showToast(msg);
   });
 });
+
+// Highlight the preset chip that matches the days that are on right now (if any)
+function renderPresetState() {
+  const on = DAYS.map((d, i) => schedule[i].on);
+  const isWeekend = (d) => d.dow === 0 || d.dow === 6;
+  const match = {
+    weekday: DAYS.every((d, i) => on[i] === !isWeekend(d)),
+    weekend: DAYS.every((d, i) => on[i] === isWeekend(d)),
+    all: on.every(Boolean),
+    none: on.every((v) => !v),
+  };
+  document.querySelectorAll("[data-preset]").forEach((chip) => {
+    const active = !!match[chip.dataset.preset];
+    chip.classList.toggle("on", active);
+    chip.setAttribute("aria-pressed", String(active));
+  });
+}
 
 // 1. 시간대별 곡 선택: 곡 변경은 목록을 새로 채우고, 곡 추가는 지금 곡 뒤에 이어 붙임
 // 재생할 수 없는 파일(음악이 아님, 손상, 지원하지 않는 형식, 0초)은 넣지 않고 알려줌
@@ -854,7 +900,11 @@ function nextSlot() {
 
 // Header status: dot colour + text (gray = off, green = waiting, blue = playing, amber = nothing to play)
 function updateStatus() {
-  toggleScheduleBtn.textContent = isScheduled ? "스케줄 중지" : "스케줄 시작";
+  // 켜기/끄기: it turns the automatic schedule on or off (the player's ▶ ■ only control the song)
+  toggleScheduleBtn.textContent = isScheduled ? "스케줄 끄기" : "스케줄 켜기";
+  toggleScheduleBtn.title = isScheduled
+    ? "정해진 시각의 자동 재생을 끕니다. 스케줄로 재생 중인 음악도 멈춥니다."
+    : "정해진 시각에 자동으로 재생합니다.";
   toggleScheduleBtn.className = isScheduled ? "btn btn-ghost" : "btn btn-primary";
   let text;
   let state;
@@ -872,7 +922,7 @@ function updateStatus() {
   scheduleStatus.className = `status-pill ${state}`;
   scheduleStatus.title = text;
   $("scheduleText").textContent = text;
-  if (ipc) ipc.send("status", text); // tray icon tooltip
+  if (ipc) ipc.send("status", text, isScheduled); // tray tooltip; main asks before quitting while on
 }
 
 // 2. 플레이어에 시간대의 곡 목록 불러오기
@@ -928,7 +978,7 @@ function renderNowPlaying() {
   });
 }
 
-// 3. 스케줄 시작 / 중지
+// 3. 스케줄 켜기 / 끄기
 toggleScheduleBtn.addEventListener("click", () => {
   if (!isScheduled) {
     const onDays = DAYS.map((d, i) => i).filter((i) => schedule[i].on);
@@ -995,7 +1045,7 @@ function enableSchedule(announce) {
 function disableSchedule() {
   isScheduled = false;
   saveScheduleOn(false);
-  // 스케줄 중지는 스케줄로 재생 중인 음악도 멈춤 (미리듣기는 그대로)
+  // 스케줄 끄기는 스케줄로 재생 중인 음악도 멈춤 (미리듣기는 그대로)
   if (playingLabel) finishScheduledPlay();
   updateStatus();
 }
@@ -1279,10 +1329,12 @@ function renderCalendar() {
     // Stop after the week that holds the month's last day
     if (k % 7 === 0 && k > 0 && (date.getMonth() !== m)) break;
     const day = schedule[dayIndexOf(date)];
-    const dots = day.on
+    // One dot per time slot (up to 3): filled = has songs, hollow = no songs.
+    // Days of the previous/next month get no dots so this month's schedule stands out.
+    const dots = day.on && date.getMonth() === m
       ? day.slots
           .slice(0, 3)
-          .map((s) => `<i class="dot${s.tracks.length ? "" : " empty"}"></i>`)
+          .map((s) => `<i class="dot${playable(s) ? "" : " empty"}"></i>`)
           .join("")
       : "";
     const cls = ["cal-day"];
@@ -1313,7 +1365,8 @@ function renderCalDetail() {
     body = `<ul>${day.slots
       .map(
         (s) =>
-          `<li><i class="dot${s.tracks.length ? "" : " empty"}"></i><b>${rangeText(s)}</b><span>${!s.tracks.length ? "곡 없음" : slotMusicSeconds(s) ? `총 ${lengthText(slotMusicSeconds(s))}` : ""}</span></li>`,
+          // "곡 2시간 42분" is the songs' total length, not the length of the time range
+          `<li><i class="dot${playable(s) ? "" : " empty"}"></i><b>${rangeText(s)}</b><span>${!s.tracks.length ? "곡 없음" : slotMusicSeconds(s) ? `곡 ${lengthText(slotMusicSeconds(s))}` : ""}</span></li>`,
       )
       .join("")}</ul>`;
   calDetail.innerHTML = `
@@ -1374,7 +1427,7 @@ setInterval(() => {
 
 // 7. 타이틀 수정 (저장해서 다음 실행에도 유지, 창 제목도 같이 변경)
 const TITLE_KEY = "schedule-player-title";
-const DEFAULT_TITLE = "스케줄 음악 플레이어";
+const DEFAULT_TITLE = "스케줄 플레이어";
 const appTitle = $("appTitle");
 let savedTitle = DEFAULT_TITLE;
 try {
@@ -1447,6 +1500,7 @@ if (!ipc) {
 }
 
 renderDays();
+renderPresetState();
 updateStatus();
 renderCalendar();
 probeDurations(); // 저장된 곡 중 길이를 아직 모르는 곡 읽기
@@ -1550,3 +1604,144 @@ new MutationObserver((records) => {
     }
   }
 }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["title"] });
+
+// 10. 창 제목 표시줄: 앱 헤더가 제목 표시줄 자리를 쓰므로, 오른쪽 위 ─ □ ✕ 버튼과 겹치지 않게 헤더 오른쪽을 비움
+function fitHeaderToCaption() {
+  const header = document.querySelector(".app-header");
+  if (!header) return;
+  const wco = navigator.windowControlsOverlay;
+  let buttonsLeft;
+  if (wco && wco.visible) {
+    const area = wco.getTitlebarAreaRect(); // the title bar part left of the buttons
+    buttonsLeft = area.x + area.width;
+  } else if (ipc) {
+    buttonsLeft = window.innerWidth - 140; // Electron without the overlay API: about three caption buttons
+  } else {
+    buttonsLeft = window.innerWidth; // plain browser: nothing to avoid
+  }
+  const overlap = header.getBoundingClientRect().right - buttonsLeft + 8;
+  header.style.setProperty("--header-pad-right", `${Math.max(0, Math.round(overlap))}px`);
+}
+fitHeaderToCaption();
+window.addEventListener("resize", fitHeaderToCaption);
+if (navigator.windowControlsOverlay) {
+  navigator.windowControlsOverlay.addEventListener("geometrychange", fitHeaderToCaption);
+}
+
+// 11. 앱 안 확인 창: 창 닫기·종료를 메인 프로세스가 물어보면 Windows 기본 창 대신 앱 스타일로 물음
+// buttons: [{ id, label, kind: "primary" | "danger" | "ghost", focus }]; Esc or a click outside = "cancel".
+function showConfirm({ title, detail, buttons, checkbox }) {
+  return new Promise((resolve) => {
+    const back = document.createElement("div");
+    back.className = "modal-backdrop";
+    const box = document.createElement("div");
+    box.className = "modal";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "modalTitle");
+    const h = document.createElement("h2");
+    h.id = "modalTitle";
+    h.textContent = title;
+    const p = document.createElement("p");
+    p.textContent = detail;
+    box.append(h, p);
+    let check = null;
+    if (checkbox) {
+      const label = document.createElement("label");
+      label.className = "modal-check";
+      check = document.createElement("input");
+      check.type = "checkbox";
+      label.append(check, document.createTextNode(checkbox));
+      box.append(label);
+    }
+    const actions = document.createElement("div");
+    actions.className = "modal-actions";
+    let focusBtn = null;
+    const done = (choice) => {
+      document.removeEventListener("keydown", onKey, true);
+      back.remove();
+      if (ipc) ipc.send("overlay-dim", false);
+      resolve({ choice, remember: !!(check && check.checked) });
+    };
+    for (const b of buttons) {
+      const btn = document.createElement("button");
+      btn.className = `btn ${b.kind === "primary" ? "btn-primary" : b.kind === "danger" ? "btn-danger" : "btn-ghost"}`;
+      btn.textContent = b.label;
+      btn.addEventListener("click", () => done(b.id));
+      if (b.focus) focusBtn = btn;
+      actions.append(btn);
+    }
+    box.append(actions);
+    back.append(box);
+    back.addEventListener("mousedown", (e) => {
+      if (e.target === back) done("cancel");
+    });
+    // Esc cancels; Tab stays inside the box
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        done("cancel");
+      } else if (e.key === "Tab") {
+        const items = [...box.querySelectorAll("button, input")];
+        const k = items.indexOf(document.activeElement);
+        const next = e.shiftKey ? (k <= 0 ? items.length - 1 : k - 1) : (k + 1) % items.length;
+        e.preventDefault();
+        items[next].focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    hideTip();
+    document.body.append(back);
+    if (ipc) ipc.send("overlay-dim", true); // dim the window buttons with the page
+    (focusBtn || actions.lastChild).focus();
+  });
+}
+
+if (ipc) {
+  ipc.on("ask", async (_e, kind, info) => {
+    let answer;
+    if (kind === "close") {
+      answer = await showConfirm({
+        title: "창을 닫을까요?",
+        detail: info.scheduleOn
+          ? "트레이로 숨기면 스케줄이 계속 동작합니다.\n종료하면 예정된 음악이 재생되지 않습니다."
+          : "트레이로 숨기면 앱이 계속 실행됩니다.",
+        checkbox: "다시 묻지 않기",
+        buttons: [
+          { id: "cancel", label: "취소", kind: "ghost" },
+          { id: "quit", label: "종료", kind: "ghost" },
+          { id: "hide", label: "트레이로 숨기기", kind: "primary", focus: true },
+        ],
+      });
+    } else {
+      answer = await showConfirm({
+        title: "종료할까요?",
+        detail: "스케줄이 켜져 있습니다. 종료하면 예정된 음악이 재생되지 않습니다.",
+        buttons: [
+          { id: "cancel", label: "취소", kind: "ghost", focus: true },
+          { id: "quit", label: "종료", kind: "danger" },
+        ],
+      });
+    }
+    ipc.send("ask-answer", answer);
+  });
+}
+
+// 12. 초점 테두리는 키보드로 움직일 때만: 마우스로 누른 버튼·시간 선택에는 남지 않음
+// body.pointer while the mouse is in use; Tab or arrow keys switch back to keyboard mode.
+document.body.classList.add("pointer");
+document.addEventListener("pointerdown", () => document.body.classList.add("pointer"), true);
+document.addEventListener(
+  "keydown",
+  (e) => {
+    const nav = ["Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"];
+    if (nav.includes(e.key) && !(e.target && e.target.isContentEditable)) {
+      document.body.classList.remove("pointer");
+    }
+  },
+  true,
+);
+// A select keeps focus after choosing with the mouse; let it go so nothing stays highlighted
+document.addEventListener("change", (e) => {
+  if (document.body.classList.contains("pointer") && e.target.tagName === "SELECT") e.target.blur();
+});
